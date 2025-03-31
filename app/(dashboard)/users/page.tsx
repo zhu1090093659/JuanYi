@@ -58,10 +58,10 @@ export default function UsersPage() {
         <CardDescription>您需要在 Supabase 中创建必要的数据库表</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Alert variant="warning">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>数据库表不存在</AlertTitle>
-          <AlertDescription>系统检测到 'users' 表不存在。请按照以下步骤设置数据库。</AlertDescription>
+        <Alert className="border-amber-500 bg-amber-50 dark:bg-amber-900/20">
+          <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          <AlertTitle className="text-amber-800 dark:text-amber-300">数据库表不存在</AlertTitle>
+          <AlertDescription className="text-amber-700 dark:text-amber-400">系统检测到 'users' 表不存在。请按照以下步骤设置数据库。</AlertDescription>
         </Alert>
 
         <div className="space-y-2">
@@ -347,4 +347,3 @@ VALUES ('teacher@example.com', '张老师', 'teacher', '示范中学');`}
     </div>
   )
 }
-

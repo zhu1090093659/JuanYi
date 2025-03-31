@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache"
 
 // 评分 Server Action
 export async function gradeStudentAnswer(questionId: string, studentId: string, examId: string) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   // 获取题目信息
   const { data: question } = await supabase.from("questions").select("*").eq("id", questionId).single()
@@ -52,7 +52,7 @@ export async function gradeStudentAnswer(questionId: string, studentId: string, 
 
 // 教师修改评分 Server Action
 export async function updateGrade(gradeId: string, score: number, feedback: string, examId: string) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   await supabase
     .from("grades")
@@ -69,7 +69,7 @@ export async function updateGrade(gradeId: string, score: number, feedback: stri
 
 // 批量评分 Server Action
 export async function batchGradeExam(examId: string) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   // 获取考试信息
   const { data: exam } = await supabase.from("exams").select("*").eq("id", examId).single()
@@ -114,7 +114,7 @@ export async function batchGradeExam(examId: string) {
 
 // 生成学生反馈报告
 export async function generateStudentReport(studentId: string, examId: string) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   // 获取学生信息
   const { data: student } = await supabase.from("users").select("*").eq("id", studentId).single()
@@ -163,4 +163,3 @@ export async function generateStudentReport(studentId: string, examId: string) {
 
   return feedback
 }
-

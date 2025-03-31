@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -13,7 +13,10 @@ import { useToast } from "@/components/ui/use-toast"
 import { AIGradingProcess } from "@/components/ai-grading/ai-grading-process"
 import { GradingResults } from "@/components/ai-grading/grading-results"
 
-export default function AIGradingPage({ params }: { params: { id: string } }) {
+export default function AIGradingPage() {
+  const params = useParams();
+  const examId = params?.id as string;
+  
   const [examData, setExamData] = useState<any>(null)
   const [questions, setQuestions] = useState<any[]>([])
   const [students, setStudents] = useState<any[]>([])
@@ -29,7 +32,7 @@ export default function AIGradingPage({ params }: { params: { id: string } }) {
 
   useEffect(() => {
     fetchExamData()
-  }, [params.id])
+  }, [examId])
 
   async function fetchExamData() {
     try {
@@ -43,7 +46,7 @@ export default function AIGradingPage({ params }: { params: { id: string } }) {
           *,
           subjects(name)
         `)
-        .eq("id", params.id)
+        .eq("id", examId)
         .single()
 
       if (examError) throw examError
@@ -53,7 +56,7 @@ export default function AIGradingPage({ params }: { params: { id: string } }) {
       const { data: questionsData, error: questionsError } = await supabase
         .from("questions")
         .select("*")
-        .eq("exam_id", params.id)
+        .eq("exam_id", examId)
         .order("number", { ascending: true })
 
       if (questionsError) throw questionsError
@@ -66,7 +69,7 @@ export default function AIGradingPage({ params }: { params: { id: string } }) {
           *,
           students:users(id, name, class)
         `)
-        .eq("exam_id", params.id)
+        .eq("exam_id", examId)
 
       if (answersError) throw answersError
 
@@ -86,7 +89,7 @@ export default function AIGradingPage({ params }: { params: { id: string } }) {
       const { data: gradesData, error: gradesError } = await supabase
         .from("grades")
         .select("*")
-        .eq("exam_id", params.id)
+        .eq("exam_id", examId)
 
       if (gradesError) throw gradesError
       setGrades(gradesData || [])
@@ -243,7 +246,7 @@ export default function AIGradingPage({ params }: { params: { id: string } }) {
 
         <TabsContent value="process" className="space-y-4">
           <AIGradingProcess
-            examId={params.id}
+            examId={examId}
             questions={questions}
             students={students}
             answers={answers}
@@ -253,10 +256,9 @@ export default function AIGradingPage({ params }: { params: { id: string } }) {
         </TabsContent>
 
         <TabsContent value="results" className="space-y-4">
-          <GradingResults examId={params.id} questions={questions} students={students} grades={grades} />
+          <GradingResults examId={examId} questions={questions} students={students} grades={grades} />
         </TabsContent>
       </Tabs>
     </div>
   )
 }
-

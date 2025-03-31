@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 
 export async function getQuestionsByExamId(examId: string) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const { data, error } = await supabase
     .from("questions")
@@ -19,7 +19,7 @@ export async function getQuestionsByExamId(examId: string) {
 }
 
 export async function createQuestion(questionData: any) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const { data, error } = await supabase.from("questions").insert(questionData).select().single()
 
@@ -34,7 +34,7 @@ export async function createQuestion(questionData: any) {
 }
 
 export async function updateQuestion(id: string, questionData: any) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const { data, error } = await supabase.from("questions").update(questionData).eq("id", id).select().single()
 
@@ -49,7 +49,7 @@ export async function updateQuestion(id: string, questionData: any) {
 }
 
 export async function deleteQuestion(id: string, examId: string) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const { error } = await supabase.from("questions").delete().eq("id", id)
 
@@ -60,4 +60,3 @@ export async function deleteQuestion(id: string, examId: string) {
 
   revalidatePath(`/exams/${examId}`)
 }
-

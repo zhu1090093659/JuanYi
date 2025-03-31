@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 
 export async function getGradesByExamId(examId: string) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const { data, error } = await supabase
     .from("grades")
@@ -22,7 +22,7 @@ export async function getGradesByExamId(examId: string) {
 }
 
 export async function getGradesByStudentId(studentId: string) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const { data, error } = await supabase
     .from("grades")
@@ -42,7 +42,7 @@ export async function getGradesByStudentId(studentId: string) {
 }
 
 export async function getGradesByQuestionId(questionId: string) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const { data, error } = await supabase
     .from("grades")
@@ -61,7 +61,7 @@ export async function getGradesByQuestionId(questionId: string) {
 }
 
 export async function createGrade(gradeData: any) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const { data, error } = await supabase.from("grades").insert(gradeData).select().single()
 
@@ -76,7 +76,7 @@ export async function createGrade(gradeData: any) {
 }
 
 export async function updateGrade(id: string, gradeData: any) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const { data, error } = await supabase.from("grades").update(gradeData).eq("id", id).select().single()
 
@@ -89,4 +89,3 @@ export async function updateGrade(id: string, gradeData: any) {
 
   return data
 }
-

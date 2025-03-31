@@ -7,9 +7,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ArrowLeft } from "lucide-react"
 import { supabase } from "@/lib/supabase/client"
 import { useToast } from "@/components/ui/use-toast"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 
-export default function ExamGradingPage({ params }: { params: { id: string } }) {
+export default function ExamGradingPage() {
+  const params = useParams();
+  const examId = params?.id as string;
+  
   const [examData, setExamData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -18,13 +21,13 @@ export default function ExamGradingPage({ params }: { params: { id: string } }) 
 
   useEffect(() => {
     // 如果 ID 是 "new"，则重定向到新建试卷页面
-    if (params.id === "new") {
+    if (examId === "new") {
       router.push("/exams/new")
       return
     }
 
     fetchExamData()
-  }, [params.id, router])
+  }, [examId, router])
 
   async function fetchExamData() {
     try {
@@ -39,7 +42,7 @@ export default function ExamGradingPage({ params }: { params: { id: string } }) 
           subjects(name),
           questions(*)
         `)
-        .eq("id", params.id)
+        .eq("id", examId)
         .single()
 
       if (examError) {
@@ -111,7 +114,7 @@ export default function ExamGradingPage({ params }: { params: { id: string } }) 
         </div>
         <div className="flex items-center space-x-4">
           <Button variant="outline" asChild>
-            <Link href={`/exams/${params.id}/details`}>查看详情</Link>
+            <Link href={`/exams/${examId}/details`}>查看详情</Link>
           </Button>
           <Button>开始批阅</Button>
         </div>
@@ -199,4 +202,3 @@ export default function ExamGradingPage({ params }: { params: { id: string } }) 
     </div>
   )
 }
-

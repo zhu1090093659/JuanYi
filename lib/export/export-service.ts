@@ -4,9 +4,32 @@ import { createClient } from "@/lib/supabase/server"
 import * as XLSX from "xlsx"
 import { PDFDocument, StandardFonts } from "pdf-lib"
 
+// 定义问题类型接口
+interface Question {
+  id: string;
+  number: number;
+  score: number;
+  content?: string;
+  [key: string]: any;
+}
+
+// 定义问题统计数据类型接口
+interface QuestionStat {
+  number: number;
+  content: string;
+  maxScore: number;
+  scores: number[];
+  [key: string]: any;
+}
+
+// 定义问题统计对象类型
+interface QuestionStats {
+  [questionId: string]: QuestionStat;
+}
+
 // 导出为 Excel
 export async function exportToExcel(examId: string, options: any) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   // 获取考试信息
   const { data: exam } = await supabase
@@ -51,14 +74,14 @@ export async function exportToExcel(examId: string, options: any) {
   const students = new Map()
 
   // 按学生组织数据
-  grades.forEach((grade) => {
+  grades.forEach((grade: any) => {
     const studentId = grade.student_id
 
     if (!students.has(studentId)) {
       students.set(studentId, {
         id: studentId,
-        name: grade.students.name,
-        class: grade.students.class,
+        name: grade.students?.name || "未知学生",
+        class: grade.students?.class || "未知班级",
         scores: {},
         totalScore: 0,
       })
@@ -75,7 +98,7 @@ export async function exportToExcel(examId: string, options: any) {
 
   // 添加答案数据
   if (options.includeAnswers && answers) {
-    answers.forEach((answer) => {
+    answers.forEach((answer: any) => {
       const studentId = answer.student_id
 
       if (students.has(studentId)) {
@@ -94,7 +117,7 @@ export async function exportToExcel(examId: string, options: any) {
   const wb = XLSX.utils.book_new()
 
   // 创建成绩表
-  const scoresData = Array.from(students.values()).map((student) => {
+  const scoresData = Array.from(students.values()).map((student: any) => {
     const row: any = {
       学生ID: student.id,
       姓名: student.name,
@@ -102,7 +125,7 @@ export async function exportToExcel(examId: string, options: any) {
       总分: student.totalScore,
     }
 
-    exam.questions.forEach((question) => {
+    exam.questions.forEach((question: Question) => {
       const scoreInfo = student.scores[question.id]
       if (scoreInfo) {
         row[`题目${question.number}(${question.score}分)`] = scoreInfo.score
@@ -119,7 +142,7 @@ export async function exportToExcel(examId: string, options: any) {
 
   // 如果包含题目和答案
   if (options.includeQuestions) {
-    const questionsData = exam.questions.map((question) => ({
+    const questionsData = exam.questions.map((question: Question) => ({
       题号: question.number,
       题目类型:
         question.type === "objective"
@@ -130,7 +153,7 @@ export async function exportToExcel(examId: string, options: any) {
               ? "计算题"
               : "论述题",
       分值: question.score,
-      题目内容: question.content,
+      题目内容: question.content || "",
       标准答案: question.standard_answer,
     }))
 
@@ -142,15 +165,15 @@ export async function exportToExcel(examId: string, options: any) {
   if (options.includeAnswers && answers) {
     const answersData: any[] = []
 
-    Array.from(students.values()).forEach((student) => {
-      exam.questions.forEach((question) => {
+    Array.from(students.values()).forEach((student: any) => {
+      exam.questions.forEach((question: Question) => {
         if (student.answers && student.answers[question.id]) {
           answersData.push({
             学生ID: student.id,
             姓名: student.name,
             班级: student.class,
             题号: question.number,
-            题目内容: question.content,
+            题目内容: question.content || "",
             学生答案: student.answers[question.id],
             得分: student.scores[question.id]?.score || 0,
             满分: question.score,
@@ -166,18 +189,18 @@ export async function exportToExcel(examId: string, options: any) {
   // 如果包含统计数据
   if (options.includeStatistics) {
     // 计算每道题的平均分、最高分、最低分、正确率
-    const questionStats = {}
+    const questionStats: QuestionStats = {}
 
-    exam.questions.forEach((question) => {
+    exam.questions.forEach((question: Question) => {
       questionStats[question.id] = {
         number: question.number,
-        content: question.content,
+        content: question.content || "",
         maxScore: question.score,
         scores: [],
       }
     })
 
-    Array.from(students.values()).forEach((student) => {
+    Array.from(students.values()).forEach((student: any) => {
       Object.entries(student.scores).forEach(([questionId, scoreInfo]: [string, any]) => {
         if (questionStats[questionId]) {
           questionStats[questionId].scores.push(scoreInfo.score)
@@ -187,7 +210,7 @@ export async function exportToExcel(examId: string, options: any) {
 
     const statsData = Object.values(questionStats).map((stat: any) => {
       const scores = stat.scores
-      const avgScore = scores.length > 0 ? scores.reduce((sum, score) => sum + score, 0) / scores.length : 0
+      const avgScore = scores.length > 0 ? scores.reduce((sum: number, score: number) => sum + score, 0) / scores.length : 0
       const maxScore = scores.length > 0 ? Math.max(...scores) : 0
       const minScore = scores.length > 0 ? Math.min(...scores) : 0
       const correctRate = (avgScore / stat.maxScore) * 100
@@ -220,7 +243,7 @@ export async function exportToExcel(examId: string, options: any) {
 
 // 导出为 PDF
 export async function exportToPdf(examId: string, options: any) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   // 获取考试信息
   const { data: exam } = await supabase
@@ -336,14 +359,14 @@ export async function exportToPdf(examId: string, options: any) {
   // 处理学生数据
   const students = new Map()
 
-  grades.forEach((grade) => {
+  grades.forEach((grade: any) => {
     const studentId = grade.student_id
 
     if (!students.has(studentId)) {
       students.set(studentId, {
         id: studentId,
-        name: grade.students.name,
-        class: grade.students.class,
+        name: grade.students?.name || "未知学生",
+        class: grade.students?.class || "未知班级",
         scores: {},
         totalScore: 0,
       })
@@ -434,12 +457,12 @@ export async function exportToPdf(examId: string, options: any) {
     })
 
     // 计算每道题的统计数据
-    const questionStats = {}
+    const questionStats: QuestionStats = {}
 
-    exam.questions.forEach((question) => {
+    exam.questions.forEach((question: Question) => {
       questionStats[question.id] = {
         number: question.number,
-        content: question.content,
+        content: question.content || "",
         maxScore: question.score,
         scores: [],
       }
@@ -474,7 +497,7 @@ export async function exportToPdf(examId: string, options: any) {
       }
 
       const scores = stat.scores
-      const avgScore = scores.length > 0 ? scores.reduce((sum, score) => sum + score, 0) / scores.length : 0
+      const avgScore = scores.length > 0 ? scores.reduce((sum: number, score: number) => sum + score, 0) / scores.length : 0
       const correctRate = (avgScore / stat.maxScore) * 100
 
       statsPage.drawText(`题目 ${stat.number}:`, {
@@ -510,7 +533,7 @@ export async function exportToPdf(examId: string, options: any) {
 
 // 导出为 CSV
 export async function exportToCsv(examId: string, options: any) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   // 获取考试信息
   const { data: exam } = await supabase
@@ -545,14 +568,14 @@ export async function exportToCsv(examId: string, options: any) {
   const students = new Map()
 
   // 按学生组织数据
-  grades.forEach((grade) => {
+  grades.forEach((grade: any) => {
     const studentId = grade.student_id
 
     if (!students.has(studentId)) {
       students.set(studentId, {
         id: studentId,
-        name: grade.students.name,
-        class: grade.students.class,
+        name: grade.students?.name || "未知学生",
+        class: grade.students?.class || "未知班级",
         scores: {},
         totalScore: 0,
       })
@@ -571,7 +594,7 @@ export async function exportToCsv(examId: string, options: any) {
   let csvContent = "学生ID,姓名,班级,总分"
 
   // 添加题目列
-  exam.questions.forEach((question) => {
+  exam.questions.forEach((question: Question) => {
     csvContent += `,题目${question.number}(${question.score}分)`
   })
 
@@ -581,7 +604,7 @@ export async function exportToCsv(examId: string, options: any) {
   Array.from(students.values()).forEach((student: any) => {
     csvContent += `${student.id},${student.name},${student.class},${student.totalScore}`
 
-    exam.questions.forEach((question) => {
+    exam.questions.forEach((question: Question) => {
       const scoreInfo = student.scores[question.id]
       csvContent += `,${scoreInfo ? scoreInfo.score : 0}`
     })
@@ -621,4 +644,3 @@ export async function handleExport(examId: string, format: string, options: any)
     throw error
   }
 }
-

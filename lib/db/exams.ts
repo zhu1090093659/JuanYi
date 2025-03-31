@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 
 export async function getExams() {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const { data, error } = await supabase
     .from("exams")
@@ -22,7 +22,7 @@ export async function getExams() {
 }
 
 export async function getExamById(id: string) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const { data, error } = await supabase
     .from("exams")
@@ -44,7 +44,7 @@ export async function getExamById(id: string) {
 }
 
 export async function createExam(examData: any) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const { data, error } = await supabase.from("exams").insert(examData).select().single()
 
@@ -60,7 +60,7 @@ export async function createExam(examData: any) {
 }
 
 export async function updateExam(id: string, examData: any) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const { data, error } = await supabase.from("exams").update(examData).eq("id", id).select().single()
 
@@ -77,7 +77,7 @@ export async function updateExam(id: string, examData: any) {
 }
 
 export async function deleteExam(id: string) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const { error } = await supabase.from("exams").delete().eq("id", id)
 
@@ -90,3 +90,27 @@ export async function deleteExam(id: string) {
   revalidatePath("/dashboard")
 }
 
+export async function createExamQuestions(examId: string, questions: any[]) {
+  const supabase = await createClient()
+
+  // 为每个题目添加exam_id
+  const questionsWithExamId = questions.map(question => ({
+    ...question,
+    exam_id: examId
+  }))
+
+  const { data, error } = await supabase
+    .from("questions")
+    .insert(questionsWithExamId)
+    .select()
+
+  if (error) {
+    console.error("Error creating exam questions:", error)
+    throw new Error("Failed to create exam questions")
+  }
+
+  revalidatePath(`/exams/${examId}`)
+  revalidatePath(`/exams/${examId}/details`)
+
+  return data
+}

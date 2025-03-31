@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ArrowLeft, CheckCircle, AlertCircle, Loader2 } from "lucide-react"
@@ -13,7 +13,10 @@ import { StudentAnswerView } from "@/components/grading/student-answer-view"
 import { QuestionView } from "@/components/grading/question-view"
 import { batchGradeExam } from "@/app/actions/grading"
 
-export default function ExamGradingPage({ params }: { params: { id: string } }) {
+export default function ExamGradingPage() {
+  const params = useParams();
+  const examId = params?.id as string;
+  
   const [examData, setExamData] = useState<any>(null)
   const [questions, setQuestions] = useState<any[]>([])
   const [students, setStudents] = useState<any[]>([])
@@ -29,7 +32,7 @@ export default function ExamGradingPage({ params }: { params: { id: string } }) 
 
   useEffect(() => {
     fetchExamData()
-  }, [params.id])
+  }, [examId])
 
   async function fetchExamData() {
     try {
@@ -43,7 +46,7 @@ export default function ExamGradingPage({ params }: { params: { id: string } }) 
           *,
           subjects(name)
         `)
-        .eq("id", params.id)
+        .eq("id", examId)
         .single()
 
       if (examError) throw examError
@@ -53,7 +56,7 @@ export default function ExamGradingPage({ params }: { params: { id: string } }) 
       const { data: questionsData, error: questionsError } = await supabase
         .from("questions")
         .select("*")
-        .eq("exam_id", params.id)
+        .eq("exam_id", examId)
         .order("number", { ascending: true })
 
       if (questionsError) throw questionsError
@@ -66,7 +69,7 @@ export default function ExamGradingPage({ params }: { params: { id: string } }) 
           *,
           students:users(id, name, class)
         `)
-        .eq("exam_id", params.id)
+        .eq("exam_id", examId)
 
       if (answersError) throw answersError
 
@@ -86,7 +89,7 @@ export default function ExamGradingPage({ params }: { params: { id: string } }) 
       const { data: gradesData, error: gradesError } = await supabase
         .from("grades")
         .select("*")
-        .eq("exam_id", params.id)
+        .eq("exam_id", examId)
 
       if (gradesError) throw gradesError
       setGrades(gradesData || [])
@@ -101,7 +104,7 @@ export default function ExamGradingPage({ params }: { params: { id: string } }) 
   const handleStartBatchGrading = async () => {
     try {
       setIsGrading(true)
-      await batchGradeExam(params.id)
+      await batchGradeExam(examId)
       toast({
         title: "批量评分已开始",
         description: "系统正在处理所有答案，这可能需要一些时间",
@@ -195,7 +198,7 @@ export default function ExamGradingPage({ params }: { params: { id: string } }) 
           <h2 className="text-xl font-bold">没有题目</h2>
           <p className="text-muted-foreground mt-2">此试卷尚未添加任何题目</p>
           <Button className="mt-4" asChild>
-            <Link href={`/exams/${params.id}/edit`}>添加题目</Link>
+            <Link href={`/exams/${examId}/edit`}>添加题目</Link>
           </Button>
         </div>
       </div>
@@ -323,7 +326,7 @@ export default function ExamGradingPage({ params }: { params: { id: string } }) 
             </CardHeader>
             <CardContent>
               <GradingPanel
-                examId={params.id}
+                examId={examId}
                 question={currentQuestion}
                 student={currentStudent}
                 answer={currentAnswer}
@@ -337,4 +340,3 @@ export default function ExamGradingPage({ params }: { params: { id: string } }) 
     </div>
   )
 }
-

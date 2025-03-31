@@ -7,9 +7,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ArrowLeft, FileText } from "lucide-react"
 import { supabase } from "@/lib/supabase/client"
 import { useToast } from "@/components/ui/use-toast"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 
-export default function ExamDetailsPage({ params }: { params: { id: string } }) {
+export default function ExamDetailsPage() {
+  const params = useParams();
+  const examId = params?.id as string;
+  
   const [examData, setExamData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -18,7 +21,7 @@ export default function ExamDetailsPage({ params }: { params: { id: string } }) 
 
   useEffect(() => {
     fetchExamData()
-  }, [params.id])
+  }, [examId])
 
   async function fetchExamData() {
     try {
@@ -33,7 +36,7 @@ export default function ExamDetailsPage({ params }: { params: { id: string } }) 
           subjects(name),
           created_by:users(name)
         `)
-        .eq("id", params.id)
+        .eq("id", examId)
         .single()
 
       if (examError) {
@@ -91,7 +94,7 @@ export default function ExamDetailsPage({ params }: { params: { id: string } }) 
         </div>
         <div className="flex items-center space-x-2">
           <Button asChild>
-            <Link href={`/exams/${params.id}`}>
+            <Link href={`/exams/${examId}`}>
               <FileText className="mr-2 h-4 w-4" />
               批阅试卷
             </Link>
@@ -162,4 +165,3 @@ export default function ExamDetailsPage({ params }: { params: { id: string } }) 
     </div>
   )
 }
-

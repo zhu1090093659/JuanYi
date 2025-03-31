@@ -11,10 +11,10 @@ interface QuestionViewProps {
 export function QuestionView({ question }: QuestionViewProps) {
   if (!question) {
     return (
-      <Alert variant="warning">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>未找到题目</AlertTitle>
-        <AlertDescription>请选择一个题目进行评阅</AlertDescription>
+      <Alert className="border-amber-500 bg-amber-50 dark:bg-amber-900/20">
+        <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+        <AlertTitle className="text-amber-800 dark:text-amber-300">未找到题目</AlertTitle>
+        <AlertDescription className="text-amber-700 dark:text-amber-400">请选择一个题目进行评阅</AlertDescription>
       </Alert>
     )
   }
@@ -32,4 +32,3 @@ export function QuestionView({ question }: QuestionViewProps) {
     </div>
   )
 }
-

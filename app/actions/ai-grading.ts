@@ -6,7 +6,7 @@ import { gradeAnswer, batchGradeAnswers } from "@/lib/ai"
 
 // 批量评分函数
 export async function batchGradeExam(examId: string) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   try {
     // 更新考试状态为"评分中"
@@ -32,7 +32,7 @@ export async function batchGradeExam(examId: string) {
         exam_id
       `)
       .eq("exam_id", examId)
-      .not("id", "in", supabase.from("grades").select("answer_id").eq("exam_id", examId))
+      .not("id", "in", await supabase.from("grades").select("answer_id").eq("exam_id", examId))
 
     if (answersError) throw answersError
     if (!answers || answers.length === 0) {
@@ -77,7 +77,7 @@ export async function batchGradeExam(examId: string) {
       .from("answers")
       .select("id", { count: "exact" })
       .eq("exam_id", examId)
-      .not("id", "in", supabase.from("grades").select("answer_id").eq("exam_id", examId))
+      .not("id", "in", await supabase.from("grades").select("answer_id").eq("exam_id", examId))
 
     if (countError) throw countError
 
@@ -112,7 +112,7 @@ export async function batchGradeExam(examId: string) {
 
 // 评分单个学生答案
 export async function gradeStudentAnswer(questionId: string, studentId: string, examId: string) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   try {
     // 获取题目信息
@@ -176,7 +176,7 @@ export async function updateGrade(
     scoring_points?: string
   },
 ) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   try {
     // 获取原始评分信息
@@ -210,7 +210,7 @@ export async function updateGrade(
 
 // 分析考试结果
 export async function analyzeExamResults(examId: string) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   try {
     // 获取考试信息
@@ -246,8 +246,19 @@ export async function analyzeExamResults(examId: string) {
     const totalQuestions = questions.length
     const totalPossibleScore = questions.reduce((sum, q) => sum + q.score, 0)
 
+    // 定义接口类型
+    interface StudentScore {
+      total: number;
+      count: number;
+      student?: any;
+    }
+    
+    interface StudentScores {
+      [studentId: string]: StudentScore;
+    }
+
     // 计算平均分
-    const studentScores = {}
+    const studentScores: StudentScores = {}
     grades.forEach((grade) => {
       if (!studentScores[grade.student_id]) {
         studentScores[grade.student_id] = {
@@ -311,4 +322,3 @@ export async function analyzeExamResults(examId: string) {
     throw new Error(`分析考试结果过程中发生错误: ${error.message}`)
   }
 }
-

@@ -1,3 +1,5 @@
+"use client"
+
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -6,8 +8,99 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useState, useEffect } from "react"
+import { ExternalLink } from "lucide-react"
+import Link from "next/link"
+import { useToast } from "@/hooks/use-toast"
 
 export default function SettingsPage() {
+  const [apiKey, setApiKey] = useState("")
+  const [aiModel, setAiModel] = useState("gpt-4o")
+  const [customModel, setCustomModel] = useState("")
+  const [showCustomModel, setShowCustomModel] = useState(false)
+  const { toast } = useToast()
+
+  // 从本地存储加载设置
+  useEffect(() => {
+    const savedApiKey = localStorage.getItem("openai_api_key")
+    const savedAiModel = localStorage.getItem("openai_model") || "gpt-4o"
+    
+    if (savedApiKey) setApiKey(savedApiKey)
+    if (savedAiModel) {
+      // 检查是否是预设模型之一
+      const presetModels = [
+        "gpt-4o", 
+        "o3-mini", 
+        "claude-3-7-sonnet-20250219", 
+        "claude-3-7-sonnet-thinking", 
+        "gemini-2.5-pro-exp-03-25", 
+        "gemini-2.0-flash"
+      ];
+      
+      if (presetModels.includes(savedAiModel)) {
+        setAiModel(savedAiModel);
+        setShowCustomModel(false);
+      } else {
+        setAiModel("custom");
+        setCustomModel(savedAiModel);
+        setShowCustomModel(true);
+      }
+    }
+  }, [])
+
+  // 处理模型变更
+  const handleModelChange = (value: string) => {
+    setAiModel(value);
+    if (value === "custom") {
+      setShowCustomModel(true);
+    } else {
+      setShowCustomModel(false);
+    }
+  }
+
+  // 保存API设置
+  const saveApiSettings = () => {
+    try {
+      // 确定要保存的模型名称
+      const modelToSave = aiModel === "custom" ? customModel : aiModel;
+      
+      // 验证自定义模型不为空
+      if (aiModel === "custom" && !customModel.trim()) {
+        toast({
+          title: "保存失败",
+          description: "请输入自定义模型名称",
+          variant: "destructive",
+        })
+        return;
+      }
+      
+      // 验证API Key不为空
+      if (!apiKey.trim()) {
+        toast({
+          title: "保存失败",
+          description: "请输入OpenAI API Key",
+          variant: "destructive",
+        })
+        return;
+      }
+      
+      localStorage.setItem("openai_api_key", apiKey)
+      localStorage.setItem("openai_model", modelToSave)
+      
+      toast({
+        title: "设置已保存",
+        description: "您的API设置已成功保存",
+        variant: "default",
+      })
+    } catch (error) {
+      toast({
+        title: "保存失败",
+        description: "设置保存时出现错误",
+        variant: "destructive",
+      })
+    }
+  }
+
   return (
     <div className="flex-1 space-y-4 p-8 pt-6">
       <div className="flex items-center justify-between space-y-2">
@@ -105,6 +198,79 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
         <TabsContent value="ai" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>OpenAI API 设置</CardTitle>
+              <CardDescription>
+                配置您的 OpenAI API 密钥和模型以启用试卷解析和AI批改功能
+                <div className="mt-2">
+                  <Link 
+                    href="https://chatwithai.icu" 
+                    className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 inline-flex items-center" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                  >
+                    前往 ChatWithAI.icu 获取 API Key <ExternalLink className="ml-1 h-3 w-3" />
+                  </Link>
+                </div>
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="api-key">OpenAI API Key</Label>
+                <Input 
+                  id="api-key" 
+                  type="password" 
+                  placeholder="sk-..." 
+                  value={apiKey} 
+                  onChange={(e) => setApiKey(e.target.value)}
+                />
+                <p className="text-sm text-muted-foreground">您的API密钥将安全地存储在本地，不会被发送到我们的服务器</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ai-model">AI 模型</Label>
+                <Select 
+                  value={aiModel} 
+                  onValueChange={handleModelChange}
+                >
+                  <SelectTrigger id="ai-model">
+                    <SelectValue placeholder="选择AI模型" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="gpt-4o">GPT-4o (推荐)</SelectItem>
+                    <SelectItem value="o3-mini">o3-mini</SelectItem>
+                    <SelectItem value="claude-3-7-sonnet-20250219">claude-3-7-sonnet-20250219</SelectItem>
+                    <SelectItem value="claude-3-7-sonnet-thinking">claude-3-7-sonnet-thinking</SelectItem>
+                    <SelectItem value="gemini-2.5-pro-exp-03-25">gemini-2.5-pro-exp-03-25</SelectItem>
+                    <SelectItem value="gemini-2.0-flash">gemini-2.0-flash</SelectItem>
+                    <SelectItem value="custom">自定义模型</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {showCustomModel && (
+                <div className="space-y-2">
+                  <Label htmlFor="custom-model">自定义模型名称</Label>
+                  <Input 
+                    id="custom-model" 
+                    value={customModel} 
+                    onChange={(e) => setCustomModel(e.target.value)}
+                  />
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label>API Base URL</Label>
+                <Input 
+                  value="https://chatwithai.icu/v1" 
+                  readOnly 
+                  disabled
+                />
+                <p className="text-sm text-muted-foreground">使用ChatWithAI.icu提供的代理服务，价格更优惠</p>
+              </div>
+            </CardContent>
+            <CardFooter>
+              <Button onClick={saveApiSettings}>保存API设置</Button>
+            </CardFooter>
+          </Card>
           <Card>
             <CardHeader>
               <CardTitle>AI 评分设置</CardTitle>
@@ -300,4 +466,3 @@ export default function SettingsPage() {
     </div>
   )
 }
-

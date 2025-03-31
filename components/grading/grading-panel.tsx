@@ -46,7 +46,21 @@ export function GradingPanel({ examId, question, student, answer, initialGrade, 
 
       setScore(result.score)
       setFeedback(result.feedback)
-      setScoringPoints(result.scoringPoints)
+      // 检查并转换scoringPoints, 确保是数组类型
+      if (typeof result.scoringPoints === 'string') {
+        try {
+          // 尝试解析JSON字符串为数组
+          setScoringPoints(JSON.parse(result.scoringPoints))
+        } catch (e) {
+          // 解析失败时设置为包含该字符串的数组
+          setScoringPoints([result.scoringPoints])
+        }
+      } else if (Array.isArray(result.scoringPoints)) {
+        setScoringPoints(result.scoringPoints)
+      } else {
+        // 不是字符串也不是数组时，设置为空数组
+        setScoringPoints([])
+      }
       setConfidence(result.confidence)
 
       toast({
@@ -96,10 +110,10 @@ export function GradingPanel({ examId, question, student, answer, initialGrade, 
 
   if (!answer) {
     return (
-      <Alert variant="warning">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>未找到答案</AlertTitle>
-        <AlertDescription>该学生尚未提交此题目的答案</AlertDescription>
+      <Alert className="border-amber-500 bg-amber-50 dark:bg-amber-900/20">
+        <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+        <AlertTitle className="text-amber-800 dark:text-amber-300">未找到答案</AlertTitle>
+        <AlertDescription className="text-amber-700 dark:text-amber-400">该学生尚未提交此题目的答案</AlertDescription>
       </Alert>
     )
   }
@@ -237,4 +251,3 @@ export function GradingPanel({ examId, question, student, answer, initialGrade, 
     </div>
   )
 }
-
