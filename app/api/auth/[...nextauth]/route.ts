@@ -50,19 +50,17 @@ const handler = NextAuth({
             .eq("id", data.user.id)
             .single();
             
-          if (userError) {
-            console.error("获取用户资料失败:", userError);
-          }
+          if (userError) throw userError;
           
           // 返回用户信息以用于NextAuth会话
           return {
             id: data.user.id,
             email: data.user.email,
-            name: userData?.name || data.user.email?.split("@")[0],
-            role: userData?.role || "user",
-            school: userData?.school || "",
-            class: userData?.class || "",
-            emailVerified: data.user.email_confirmed_at,
+            name: userData?.name,
+            role: userData?.role,
+            school: userData?.school,
+            class: userData?.class,
+            emailVerified: new Date(data.user.email_confirmed_at)
           };
         } catch (error: any) {
           console.error("授权错误:", error.message);
@@ -81,7 +79,7 @@ const handler = NextAuth({
         token.role = user.role;
         token.school = user.school;
         token.class = user.class;
-        token.emailVerified = user.emailVerified;
+        token.emailVerified = user.emailVerified || undefined;
       }
       return token;
     },
