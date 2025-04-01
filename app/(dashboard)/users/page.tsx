@@ -244,15 +244,14 @@ CREATE POLICY "允许所有用户查看科目" ON public.subjects FOR SELECT USI
         </div>
 
         <div className="space-y-2">
-          <h3 className="font-medium">步骤 5: 添加测试用户（可选）</h3>
-          <p className="text-sm text-muted-foreground">您可以执行以下 SQL 来添加一个测试用户：</p>
-          <div className="bg-muted p-4 rounded-md">
-            <pre className="text-xs">
-              {`-- 添加测试用户
-INSERT INTO public.users (email, name, role, school) 
-VALUES ('teacher@example.com', '张老师', 'teacher', '示范中学');`}
-            </pre>
-          </div>
+          <h3 className="font-medium">步骤 5: 创建用户</h3>
+          <p className="text-sm text-muted-foreground">您需要在 Supabase 的身份验证功能中创建用户：</p>
+          <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-1 pl-2">
+            <li>在 Supabase 控制台中，转到 Authentication &gt; Users</li>
+            <li>点击 "Add User" 或 "Invite"</li>
+            <li>输入用户的邮箱和密码</li>
+            <li>完成用户创建后，需要在 users 表中添加该用户的补充信息（如角色、姓名等）</li>
+          </ol>
         </div>
       </CardContent>
       <CardFooter>

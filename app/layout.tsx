@@ -1,11 +1,9 @@
 import type React from "react"
 import { Inter } from "next/font/google"
-import { ThemeProvider } from "@/components/theme-provider"
-import { AuthProvider } from "@/components/auth/auth-provider"
+import { ClientProviders } from "@/components/client-providers"
 import { EnvChecker } from "@/components/env-checker"
 import { cn } from "@/lib/utils"
-import { Toaster } from "@/components/ui/toaster"
-import "./globals.css"
+import "@/styles/globals.css"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -23,13 +21,10 @@ export default function RootLayout({
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <body className={cn("min-h-screen bg-background antialiased", inter.className)}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <AuthProvider>
-            <EnvChecker />
-            {children}
-            <Toaster />
-          </AuthProvider>
-        </ThemeProvider>
+        <ClientProviders>
+          <EnvChecker />
+          {children}
+        </ClientProviders>
       </body>
     </html>
   )

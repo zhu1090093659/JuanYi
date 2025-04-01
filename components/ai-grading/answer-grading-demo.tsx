@@ -39,43 +39,26 @@ export function AnswerGradingDemo() {
       setIsGrading(true)
       setError(null)
 
-      // In a real application, you would call your server action here
-      // For demo purposes, we'll simulate the AI grading
+      // 调用后端 API 进行评分
+      const response = await fetch('/api/grade-answer', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          question,
+          standardAnswer,
+          studentAnswer,
+          maxScore
+        }),
+      });
 
-      // Simulate API call delay
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-
-      // Create a mock result (in a real app, this would come from the AI)
-      const mockResult = {
-        score: 7.5,
-        confidence: 85,
-        feedback:
-          "Your answer captures the general idea about climate change and the need for action, but lacks specificity about the global nature of the required response and doesn't mention the specific impacts discussed in the passage.",
-        scoringPoints: [
-          {
-            point: "Main topic identification",
-            status: "correct" as const,
-            comment: "Correctly identified climate change as the main topic",
-          },
-          {
-            point: "Urgency recognition",
-            status: "partially" as const,
-            comment: "Mentioned the need for quick action but didn't emphasize the urgency as strongly as the passage",
-          },
-          {
-            point: "Impact comprehension",
-            status: "partially" as const,
-            comment: "Mentioned effects on the planet but didn't specify environmental and societal impacts",
-          },
-          {
-            point: "Global perspective",
-            status: "incorrect" as const,
-            comment: "Did not mention the global nature of the required action",
-          },
-        ],
+      if (!response.ok) {
+        throw new Error(`评分请求失败: ${response.status}`);
       }
 
-      setGradingResult(mockResult)
+      const result = await response.json();
+      setGradingResult(result);
     } catch (err: any) {
       console.error("Grading error:", err)
       setError(err.message || "An error occurred during grading")
@@ -283,4 +266,3 @@ export function AnswerGradingDemo() {
     </div>
   )
 }
-

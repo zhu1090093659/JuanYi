@@ -90,7 +90,7 @@ export function EnvChecker() {
       })
 
       setMissingVars(missing)
-    }, 500) // 给予500ms的延迟等待环境变量加载
+    }, 5000) // 给予5000ms的延迟等待环境变量加载
     
     return () => clearTimeout(timer)
   }, [])

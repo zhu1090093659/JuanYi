@@ -1,0 +1,169 @@
+// This is your Prisma schema file.
+// Learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 用户表
+model User {
+  id         String            @id @default(uuid())
+  email      String            @unique
+  name       String
+  role       String
+  school     String?
+  created_at DateTime          @default(now())
+  updated_at DateTime          @updatedAt
+  grades     Grade[]
+  reports    Report[]
+  collaborations Collaboration[]
+
+  @@map("users")
+}
+
+// 科目表
+model Subject {
+  id         String    @id @default(uuid())
+  name       String
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  exams      Exam[]
+
+  @@map("subjects")
+}
+
+// 考试表
+model Exam {
+  id          String     @id @default(uuid())
+  name        String
+  description String?
+  subject_id  String
+  grade       String?
+  total_score Float?
+  exam_date   DateTime?
+  status      String
+  created_by  String?
+  created_at  DateTime   @default(now())
+  updated_at  DateTime   @updatedAt
+  graded_at   DateTime?
+  subjects    Subject    @relation(fields: [subject_id], references: [id])
+  questions   Question[]
+  grades      Grade[]
+  reports     Report[]
+  collaborations Collaboration[]
+
+  @@map("exams")
+}
+
+// 题目表
+model Question {
+  id               String   @id @default(uuid())
+  exam_id          String
+  number           Int
+  content          String
+  type             String
+  standard_answer  String?
+  score            Float
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+  exams            Exam     @relation(fields: [exam_id], references: [id])
+  grades           Grade[]
+  answers          Answer[]
+
+  @@map("questions")
+}
+
+// 成绩表
+model Grade {
+  id            String   @id @default(uuid())
+  exam_id       String
+  question_id   String
+  student_id    String
+  score         Float
+  ai_score      Float?
+  ai_confidence Float?
+  feedback      String?
+  scoring_points Int[]
+  graded_by     String?
+  graded_at     DateTime?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+  exams         Exam     @relation(fields: [exam_id], references: [id])
+  questions     Question @relation(fields: [question_id], references: [id])
+  students      User     @relation(fields: [student_id], references: [id])
+
+  @@map("grades")
+}
+
+// 答案表
+model Answer {
+  id           String   @id @default(uuid())
+  exam_id      String
+  question_id  String
+  student_id   String
+  content      String
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+  questions    Question @relation(fields: [question_id], references: [id])
+
+  @@map("answers")
+}
+
+// 报告表
+model Report {
+  id          String   @id @default(uuid())
+  student_id  String
+  exam_id     String
+  content     String
+  strengths   String?
+  weaknesses  String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  students    User     @relation(fields: [student_id], references: [id])
+  exams       Exam     @relation(fields: [exam_id], references: [id])
+
+  @@map("reports")
+}
+
+// 协作表
+model Collaboration {
+  id           String   @id @default(uuid())
+  exam_id      String
+  user_id      String
+  role         String
+  created_at   DateTime @default(now())
+  exams        Exam     @relation(fields: [exam_id], references: [id])
+  users        User     @relation(fields: [user_id], references: [id])
+
+  @@map("collaborations")
+}
+
+// 学生考试结果视图
+// StudentExamResults是一个视图，将通过SQL创建，而非通过Prisma创建
+// CREATE VIEW "student_exam_results" AS
+// SELECT 
+//   uuid_generate_v4() as id,
+//   g.student_id,
+//   g.exam_id,
+//   g.score,
+//   e.total_score,
+//   g.created_at
+// FROM grades g
+// JOIN exams e ON g.exam_id = e.id;
+
+// 活动评分员表
+model ActiveGrader {
+  id           String   @id @default(uuid())
+  exam_id      String
+  question_id  String
+  student_id   String
+  user_id      String
+  active_since DateTime @default(now())
+
+  @@map("active_graders")
+} 

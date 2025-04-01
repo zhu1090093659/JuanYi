@@ -55,13 +55,24 @@ export default function RegisterPage() {
         description: "请查看您的邮箱以验证账号",
       })
 
-      router.push("/login")
+      router.push("/login?registered=true")
     } catch (error: any) {
+      console.error("注册失败:", error);
       toast({
         title: "注册失败",
         description: error.message || "请检查您的输入信息",
         variant: "destructive",
       })
+      
+      if (error.message.includes("验证邮件发送失败") || error.message.includes("confirmation email")) {
+        console.error("注册时邮件发送失败:", error);
+        setTimeout(() => {
+          toast({
+            title: "技术提示",
+            description: "此错误通常是因为Supabase邮件服务配置问题。请联系网站管理员。",
+          });
+        }, 1000);
+      }
     } finally {
       setIsLoading(false)
     }
@@ -123,10 +134,10 @@ export default function RegisterPage() {
               <div className="flex flex-col space-y-1.5">
                 <Label htmlFor="role">角色</Label>
                 <Select value={role} onValueChange={(value: "teacher" | "student" | "admin") => setRole(value)}>
-                  <SelectTrigger id="role">
+                  <SelectTrigger id="role" className="w-full">
                     <SelectValue placeholder="选择您的角色" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper" className="z-[100]">
                     <SelectItem value="teacher">教师</SelectItem>
                     <SelectItem value="student">学生</SelectItem>
                     <SelectItem value="admin">教务管理员</SelectItem>

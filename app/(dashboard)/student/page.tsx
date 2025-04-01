@@ -93,7 +93,7 @@ export default function StudentDashboardPage() {
           examName: exam.name,
           date: new Date(exam.date).toLocaleDateString(),
           score: exam.percentage,
-          classAvg: Math.round(Math.random() * 10 + 70), // 模拟数据，实际应从数据库获取
+          classAvg: exam.classAvg || 0, // 使用真实数据，如果没有则默认为0
         }))
 
         setProgressData(chartData)
