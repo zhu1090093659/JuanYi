@@ -45,7 +45,7 @@ const handler = NextAuth({
           
           // 获取用户详细信息
           const { data: userData, error: userError } = await supabase
-            .from("profiles")
+            .from("users")
             .select("*")
             .eq("id", data.user.id)
             .single();
