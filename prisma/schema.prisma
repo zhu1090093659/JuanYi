@@ -7,7 +7,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url      = "postgresql://postgres.jeqzkbilkrxmkbudpkxy:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImplcXprYmlsa3J4bWtidWRwa3h5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MzQwNDQwNSwiZXhwIjoyMDU4OTgwNDA1fQ.zEjNAK446XlYvqn-0461jalW8ljPkJlPc5QPoREpk8c@db.jeqzkbilkrxmkbudpkxy.supabase.co:5432/postgres"
 }
 
 // 用户表
