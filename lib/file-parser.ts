@@ -240,8 +240,8 @@ async function extractTextFromPDF(file: File): Promise<string> {
       throw new Error(`无法加载PDF解析库: ${err.message}`);
     });
 
-    // 设置PDF.js worker路径 - 使用CDN
-    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+    // 设置PDF.js worker路径 - 使用固定版本的CDN链接
+    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/build/pdf.worker.min.js`;
 
     // 将文件转换为ArrayBuffer
     const arrayBuffer = await file.arrayBuffer();

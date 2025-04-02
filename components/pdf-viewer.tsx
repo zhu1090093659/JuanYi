@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -25,9 +25,9 @@ const initWorker = async () => {
     // 导入react-pdf库中的pdfjs
     const { pdfjs } = await import('react-pdf')
     
-    // 配置worker
+    // 配置worker - 使用固定版本而不是动态版本
     if (pdfjs) {
-      pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`
+      pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/build/pdf.worker.min.js`
       return true
     }
     return false
@@ -50,6 +50,13 @@ export default function PDFViewer({ file, className = '' }: PDFViewerProps) {
   const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
   const [isWorkerInitialized, setIsWorkerInitialized] = useState<boolean>(false)
+
+  // 使用useMemo来缓存options对象，防止不必要的重新渲染
+  const pdfOptions = useMemo(() => ({
+    cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/cmaps/',
+    cMapPacked: true,
+    standardFontDataUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/standard_fonts/'
+  }), []);
 
   // 初始化PDF worker
   useEffect(() => {
@@ -164,11 +171,7 @@ export default function PDFViewer({ file, className = '' }: PDFViewerProps) {
               onLoadSuccess={onDocumentLoadSuccess}
               onLoadError={onDocumentLoadError}
               loading={<Skeleton className="w-full h-[600px]" />}
-              options={{ 
-                cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/cmaps/',
-                cMapPacked: true,
-                standardFontDataUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/standard_fonts/'
-              }}
+              options={pdfOptions}
             >
               <PDFPage 
                 pageNumber={pageNumber} 
