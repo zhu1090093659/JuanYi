@@ -44,13 +44,44 @@ const handler = NextAuth({
           }
           
           // 获取用户详细信息
-          const { data: userData, error: userError } = await supabase
+          const { data: usersData, error: userError } = await supabase
             .from("users")
             .select("*")
-            .eq("id", data.user.id)
-            .single();
+            .eq("id", data.user.id);
             
           if (userError) throw userError;
+          
+          // 如果没有找到用户记录，创建一个
+          if (!usersData || usersData.length === 0) {
+            const { data: newUser, error: createError } = await supabase
+              .from("users")
+              .insert({
+                id: data.user.id,
+                email: data.user.email,
+                name: data.user.user_metadata?.name || data.user.email?.split('@')[0] || "未命名用户",
+                role: data.user.user_metadata?.role || "student",
+                school: data.user.user_metadata?.school || "",
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              })
+              .select()
+              .single();
+            
+            if (createError) throw createError;
+            
+            return {
+              id: data.user.id,
+              email: data.user.email,
+              name: newUser.name,
+              role: newUser.role,
+              school: newUser.school,
+              class: newUser.class,
+              emailVerified: new Date(data.user.email_confirmed_at)
+            };
+          }
+          
+          // 使用第一个找到的用户记录
+          const userData = usersData[0];
           
           // 返回用户信息以用于NextAuth会话
           return {
