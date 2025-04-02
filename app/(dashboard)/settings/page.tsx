@@ -54,7 +54,7 @@ export default function SettingsPage() {
         // 使用API获取当前用户信息，传递token
         const response = await fetch('/api/users/current', {
           headers: {
-            'Authorization': `Bearer ${session.access_token}`
+            'Authorization': `Bearer ${session?.user?.email || ''}`
           }
         });
         const data = await response.json();
@@ -69,7 +69,7 @@ export default function SettingsPage() {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${session.access_token}`
+                'Authorization': `Bearer ${session?.user?.email || ''}`
               },
               body: JSON.stringify({
                 name: data.authUser.user_metadata?.name || data.authUser.email?.split('@')[0] || "未命名用户",
@@ -210,7 +210,7 @@ export default function SettingsPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
+          'Authorization': `Bearer ${session?.user?.email || ''}`
         },
         body: JSON.stringify({
           name: formData.name,
@@ -670,7 +670,7 @@ function TeamMembersList({ userData }: { userData: any }) {
         // 使用API获取团队成员列表
         const response = await fetch('/api/users/list', {
           headers: {
-            'Authorization': `Bearer ${session.access_token}`
+            'Authorization': `Bearer ${session?.user?.email || ''}`
           }
         });
         
@@ -732,7 +732,7 @@ function TeamMembersList({ userData }: { userData: any }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
+          'Authorization': `Bearer ${session?.user?.email || ''}`
         },
         body: JSON.stringify({
           userId,

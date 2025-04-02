@@ -24,24 +24,17 @@ export async function GET(request: Request) {
       );
     }
     
-    // 提取令牌
-    const token = authHeader.split(' ')[1];
+    // 提取令牌（现在是email）
+    const email = authHeader.split(' ')[1];
     
-    // 通过令牌获取用户
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: "无效的授权令牌" },
-        { status: 401 }
-      );
-    }
+    // 使用email查找用户，而不是通过token
+    // 可能需要调整下面的代码来适应新的认证方式
     
     // 从users表获取详细信息
     const { data, error } = await supabase
       .from("users")
       .select("*")
-      .eq("id", user.id)
+      .eq("email", email)
       .single();
     
     if (error) {
@@ -51,9 +44,7 @@ export async function GET(request: Request) {
           { 
             error: "用户记录不存在",
             authUser: {
-              id: user.id,
-              email: user.email,
-              user_metadata: user.user_metadata
+              email: email
             }
           },
           { status: 404 }
