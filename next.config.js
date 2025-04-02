@@ -25,7 +25,19 @@ const nextConfig = {
     unoptimized: true
   },
   // 配置特定的文件导入处理
-  transpilePackages: ['react-pdf', 'pdfjs-dist']
+  transpilePackages: ['react-pdf', 'pdfjs-dist'],
+  async headers() {
+    return [
+      {
+        source: '/api/:path*',
+        headers: [
+          { key: 'Access-Control-Allow-Credentials', value: 'true' },
+          { key: 'Access-Control-Allow-Origin', value: '*' },
+          { key: 'Access-Control-Allow-Methods', value: 'GET,DELETE,PATCH,POST,PUT' },
+        ],
+      },
+    ]
+  }
 };
 
 module.exports = nextConfig;
