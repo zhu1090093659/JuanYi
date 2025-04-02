@@ -74,42 +74,6 @@ export function PdfFeature({ children, fallback }: { children: ReactNode, fallba
 }
 
 export function EnvChecker() {
-  const [missingVars, setMissingVars] = useState<string[]>([])
-
-  useEffect(() => {
-    // 延迟检查环境变量，确保Next.js有足够时间加载它们
-    const timer = setTimeout(() => {
-      const requiredVars = ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY"]
-      
-      // 检查客户端可访问的环境变量（仅检查NEXT_PUBLIC_前缀的变量）
-      const missing = requiredVars.filter((varName) => {
-        // 使用window对象上的ENV获取环境变量
-        const value = process.env[varName] || 
-                     (typeof window !== 'undefined' && (window as any).__ENV && (window as any).__ENV[varName])
-        return !value
-      })
-
-      setMissingVars(missing)
-    }, 5000) // 给予5000ms的延迟等待环境变量加载
-    
-    return () => clearTimeout(timer)
-  }, [])
-
-  if (missingVars.length === 0) return null
-
-  return (
-    <Alert variant="destructive" className="mb-4">
-      <AlertCircle className="h-4 w-4" />
-      <AlertTitle>缺少环境变量</AlertTitle>
-      <AlertDescription>
-        <p>以下环境变量未正确配置：</p>
-        <ul className="list-disc pl-5 mt-2">
-          {missingVars.map((varName) => (
-            <li key={varName}>{varName}</li>
-          ))}
-        </ul>
-        <p className="mt-2">请确保这些变量已在 .env.local 文件中正确设置，并重启应用。</p>
-      </AlertDescription>
-    </Alert>
-  )
+  // 不再检查环境变量，直接返回null
+  return null
 }

@@ -9,19 +9,137 @@ import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useState, useEffect } from "react"
-import { ExternalLink } from "lucide-react"
+import { ExternalLink, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
+import { supabase } from "@/lib/supabase/client"
+import { useRouter } from "next/navigation"
 
 export default function SettingsPage() {
   const [apiKey, setApiKey] = useState("")
   const [aiModel, setAiModel] = useState("gpt-4o")
   const [customModel, setCustomModel] = useState("")
   const [showCustomModel, setShowCustomModel] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [userData, setUserData] = useState<any>(null)
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    school: ""
+  })
   const { toast } = useToast()
+  const router = useRouter()
 
-  // 从本地存储加载设置
+  // 加载用户数据
   useEffect(() => {
+    async function fetchUserData() {
+      try {
+        setLoading(true)
+        
+        // 获取当前会话
+        const { data: { session } } = await supabase.auth.getSession()
+        
+        if (!session) {
+          toast({
+            title: "未登录",
+            description: "请先登录后再访问设置页面",
+            variant: "destructive",
+          })
+          router.push("/auth/login")
+          return
+        }
+        
+        // 使用API获取当前用户信息，传递token
+        const response = await fetch('/api/users/current', {
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`
+          }
+        });
+        const data = await response.json();
+        
+        if (!response.ok) {
+          // 如果是用户不存在，尝试创建用户
+          if (response.status === 404 && data.authUser) {
+            console.log("用户在自定义表中不存在，正在创建记录...");
+            
+            // 通过API创建新用户记录
+            const createResponse = await fetch('/api/users/create', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.access_token}`
+              },
+              body: JSON.stringify({
+                name: data.authUser.user_metadata?.name || data.authUser.email?.split('@')[0] || "未命名用户",
+                role: data.authUser.user_metadata?.role || "student",
+                school: data.authUser.user_metadata?.school || ""
+              }),
+            });
+            
+            if (!createResponse.ok) {
+              const errorData = await createResponse.json();
+              console.error("创建用户记录失败:", errorData);
+              toast({
+                title: "创建用户失败",
+                description: errorData.error || "无法在数据库中创建用户记录",
+                variant: "destructive",
+              });
+              return;
+            }
+            
+            // 获取创建的用户数据
+            const createData = await createResponse.json();
+            
+            if (createData.success && createData.user) {
+              setUserData(createData.user);
+              setFormData({
+                name: createData.user.name || "",
+                email: createData.user.email || "",
+                school: createData.user.school || ""
+              });
+              
+              toast({
+                title: "用户记录已创建",
+                description: "您的用户信息已初始化",
+              });
+              return;
+            }
+          } else {
+            console.error("获取用户数据失败:", data.error);
+            toast({
+              title: "获取数据失败",
+              description: data.error || "无法加载您的个人信息",
+              variant: "destructive",
+            });
+            return;
+          }
+        }
+        
+        // 成功获取到用户数据
+        if (data.user) {
+          setUserData(data.user);
+          setFormData({
+            name: data.user.name || "",
+            email: data.user.email || "",
+            school: data.user.school || ""
+          });
+        }
+      } catch (error) {
+        console.error("加载用户数据出错:", error);
+        toast({
+          title: "加载失败",
+          description: "获取用户信息失败",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchUserData();
+    
+    // 从本地存储加载API设置
     const savedApiKey = localStorage.getItem("openai_api_key")
     const savedAiModel = localStorage.getItem("openai_model") || "gpt-4o"
     
@@ -46,7 +164,7 @@ export default function SettingsPage() {
         setShowCustomModel(true);
       }
     }
-  }, [])
+  }, [toast, router])
 
   // 处理模型变更
   const handleModelChange = (value: string) => {
@@ -57,6 +175,86 @@ export default function SettingsPage() {
       setShowCustomModel(false);
     }
   }
+
+  // 处理表单输入变化
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { id, value } = e.target
+    setFormData(prev => ({
+      ...prev,
+      [id]: value
+    }))
+  }
+
+  // 保存用户信息
+  const saveUserInfo = async () => {
+    if (!userData) return;
+    
+    try {
+      setSaving(true);
+      
+      // 获取当前会话
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session) {
+        toast({
+          title: "未登录",
+          description: "请先登录后再保存信息",
+          variant: "destructive",
+        })
+        return
+      }
+      
+      // 通过API保存用户信息
+      const response = await fetch('/api/users/update-profile', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          school: formData.school
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        console.error("保存用户数据失败:", data.error);
+        toast({
+          title: "保存失败",
+          description: data.error || "无法更新您的个人信息",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // 更新本地状态
+      if (data.user) {
+        setUserData(data.user);
+      } else {
+        setUserData((prev: any) => ({
+          ...prev,
+          name: formData.name,
+          school: formData.school
+        }));
+      }
+      
+      toast({
+        title: "保存成功",
+        description: "您的个人信息已更新",
+      });
+    } catch (error) {
+      console.error("保存用户信息出错:", error);
+      toast({
+        title: "保存失败",
+        description: "更新个人信息时出现错误",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   // 保存API设置
   const saveApiSettings = () => {
@@ -120,41 +318,51 @@ export default function SettingsPage() {
               <CardDescription>更新您的个人信息和偏好设置</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">姓名</Label>
-                  <Input id="name" defaultValue="张老师" />
+              {loading ? (
+                <div className="flex justify-center py-6">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">邮箱</Label>
-                  <Input id="email" defaultValue="zhang@example.com" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="school">学校</Label>
-                  <Input id="school" defaultValue="示范中学" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="subject">主教科目</Label>
-                  <Select defaultValue="math">
-                    <SelectTrigger id="subject">
-                      <SelectValue placeholder="选择科目" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="math">数学</SelectItem>
-                      <SelectItem value="chinese">语文</SelectItem>
-                      <SelectItem value="english">英语</SelectItem>
-                      <SelectItem value="physics">物理</SelectItem>
-                      <SelectItem value="chemistry">化学</SelectItem>
-                      <SelectItem value="biology">生物</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="name">姓名</Label>
+                      <Input 
+                        id="name" 
+                        value={formData.name} 
+                        onChange={handleInputChange} 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="email">邮箱</Label>
+                      <Input 
+                        id="email" 
+                        value={formData.email} 
+                        disabled 
+                      />
+                      <p className="text-xs text-muted-foreground">邮箱地址不可修改</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="school">学校</Label>
+                    <Input 
+                      id="school" 
+                      value={formData.school} 
+                      onChange={handleInputChange} 
+                    />
+                  </div>
+                </>
+              )}
             </CardContent>
             <CardFooter>
-              <Button>保存更改</Button>
+              <Button onClick={saveUserInfo} disabled={loading || saving}>
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    保存中...
+                  </>
+                ) : "保存更改"}
+              </Button>
             </CardFooter>
           </Card>
           <Card>
@@ -403,66 +611,212 @@ export default function SettingsPage() {
               <CardDescription>管理您的团队成员和权限</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">李老师</p>
-                    <p className="text-sm text-muted-foreground">li@example.com - 数学教师</p>
-                  </div>
-                  <Select defaultValue="editor">
-                    <SelectTrigger className="w-[120px]">
-                      <SelectValue placeholder="选择角色" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="admin">管理员</SelectItem>
-                      <SelectItem value="editor">编辑者</SelectItem>
-                      <SelectItem value="viewer">查看者</SelectItem>
-                    </SelectContent>
-                  </Select>
+              {loading ? (
+                <div className="flex justify-center py-6">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">王老师</p>
-                    <p className="text-sm text-muted-foreground">wang@example.com - 物理教师</p>
-                  </div>
-                  <Select defaultValue="viewer">
-                    <SelectTrigger className="w-[120px]">
-                      <SelectValue placeholder="选择角色" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="admin">管理员</SelectItem>
-                      <SelectItem value="editor">编辑者</SelectItem>
-                      <SelectItem value="viewer">查看者</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">赵老师</p>
-                    <p className="text-sm text-muted-foreground">zhao@example.com - 英语教师</p>
-                  </div>
-                  <Select defaultValue="editor">
-                    <SelectTrigger className="w-[120px]">
-                      <SelectValue placeholder="选择角色" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="admin">管理员</SelectItem>
-                      <SelectItem value="editor">编辑者</SelectItem>
-                      <SelectItem value="viewer">查看者</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+              ) : (
+                <>
+                  {userData?.role === 'admin' || userData?.role === 'teacher' ? (
+                    <div className="space-y-4">
+                      {/* 团队成员列表组件 */}
+                      <TeamMembersList userData={userData} />
+                    </div>
+                  ) : (
+                    <div className="text-center py-4 text-muted-foreground">
+                      <p>您没有管理团队的权限</p>
+                      <p className="text-sm mt-1">只有教师和管理员可以管理团队成员</p>
+                    </div>
+                  )}
+                </>
+              )}
             </CardContent>
-            <CardFooter className="flex justify-between">
-              <Button variant="outline">邀请成员</Button>
-              <Button>保存更改</Button>
+            <CardFooter className="flex justify-center">
+              {(userData?.role === 'admin' || userData?.role === 'teacher') && (
+                <Button variant="outline">邀请成员</Button>
+              )}
             </CardFooter>
           </Card>
         </TabsContent>
       </Tabs>
     </div>
+  )
+}
+
+// 团队成员列表组件
+function TeamMembersList({ userData }: { userData: any }) {
+  const [teamMembers, setTeamMembers] = useState<any[]>([])
+  const [loadingTeam, setLoadingTeam] = useState(true)
+  const { toast } = useToast()
+
+  useEffect(() => {
+    async function fetchTeamMembers() {
+      try {
+        setLoadingTeam(true)
+        
+        // 获取当前会话
+        const { data: { session } } = await supabase.auth.getSession()
+        
+        if (!session) {
+          toast({
+            title: "未登录",
+            description: "请先登录后再访问此功能",
+            variant: "destructive",
+          })
+          return
+        }
+        
+        // 使用API获取团队成员列表
+        const response = await fetch('/api/users/list', {
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`
+          }
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || '获取用户列表失败');
+        }
+        
+        const data = await response.json();
+        
+        if (data && data.users) {
+          // 确保当前用户排在第一位
+          const currentUser = data.users.find((user: any) => user.id === userData.id);
+          const otherUsers = data.users.filter((user: any) => user.id !== userData.id);
+          
+          const sortedUsers = currentUser 
+            ? [currentUser, ...otherUsers] 
+            : otherUsers;
+            
+          setTeamMembers(sortedUsers);
+        } else {
+          setTeamMembers([])
+        }
+      } catch (error) {
+        console.error("加载团队成员出错:", error);
+        toast({
+          title: "加载失败",
+          description: error instanceof Error ? error.message : "获取团队成员时出现意外错误",
+          variant: "destructive",
+        });
+        setTeamMembers([]);
+      } finally {
+        setLoadingTeam(false);
+      }
+    }
+    
+    if (userData) {
+      fetchTeamMembers();
+    }
+  }, [userData, toast]);
+  
+  // 更新用户角色
+  const updateUserRole = async (userId: string, newRole: string) => {
+    try {
+      // 获取当前会话
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session) {
+        toast({
+          title: "未登录",
+          description: "请先登录后再执行此操作",
+          variant: "destructive",
+        })
+        return
+      }
+      
+      // 通过API更新用户角色
+      const response = await fetch('/api/users/update-role', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          userId,
+          role: newRole
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || '更新角色失败');
+      }
+      
+      // 更新本地状态
+      setTeamMembers(prev => 
+        prev.map(member => 
+          member.id === userId ? {...member, role: newRole} : member
+        )
+      );
+      
+      toast({
+        title: "更新成功",
+        description: "用户角色已更新",
+      });
+    } catch (error) {
+      console.error("更新用户角色出错:", error);
+      toast({
+        title: "更新失败",
+        description: error instanceof Error ? error.message : "更新用户角色时发生错误",
+        variant: "destructive",
+      });
+    }
+  };
+  
+  if (loadingTeam) {
+    return (
+      <div className="flex justify-center py-4">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+  
+  if (teamMembers.length === 0) {
+    return (
+      <div className="text-center py-4 text-muted-foreground">
+        <p>暂无团队成员数据</p>
+        <p className="text-sm mt-1">您可以邀请成员加入您的团队</p>
+      </div>
+    )
+  }
+  
+  return (
+    <>
+      {teamMembers.map((member) => (
+        <div key={member.id} className="flex items-center justify-between">
+          <div>
+            <p className="font-medium">{member.name}</p>
+            <p className="text-sm text-muted-foreground">
+              {member.email} - {member.role === "teacher" ? "教师" : 
+                              member.role === "student" ? "学生" : 
+                              member.role === "admin" ? "管理员" : "未知"}
+            </p>
+          </div>
+          {/* 只有管理员可以更改角色 */}
+          {userData.role === 'admin' && member.id !== userData.id && (
+            <Select 
+              defaultValue={member.role} 
+              onValueChange={(value) => updateUserRole(member.id, value)}
+            >
+              <SelectTrigger className="w-[120px]">
+                <SelectValue placeholder="选择角色" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="admin">管理员</SelectItem>
+                <SelectItem value="teacher">教师</SelectItem>
+                <SelectItem value="student">学生</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+          {(userData.role !== 'admin' || member.id === userData.id) && (
+            <div className="w-[120px] text-right text-sm text-muted-foreground">
+              {member.id === userData.id ? "当前用户" : ""}
+            </div>
+          )}
+        </div>
+      ))}
+    </>
   )
 }
