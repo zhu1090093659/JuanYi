@@ -65,7 +65,7 @@ export async function POST(request: Request) {
     
     // 如果Auth用户元数据中没有这些信息，同时更新Auth用户元数据
     if (!user.user_metadata?.name || !user.user_metadata?.role) {
-      await supabase.auth.admin.updateUser(user.id, {
+      await supabase.auth.admin.updateUserById(user.id, {
         user_metadata: {
           ...user.user_metadata,
           name: newUser.name,

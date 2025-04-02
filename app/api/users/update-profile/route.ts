@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     }
     
     // 同时更新Auth用户元数据
-    await supabase.auth.admin.updateUser(user.id, {
+    await supabase.auth.admin.updateUserById(user.id, {
       user_metadata: {
         ...user.user_metadata,
         name: userData.name,
