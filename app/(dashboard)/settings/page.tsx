@@ -14,6 +14,7 @@ import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
+import { getSession } from "next-auth/react"
 
 export default function SettingsPage() {
   const [apiKey, setApiKey] = useState("")
@@ -37,8 +38,8 @@ export default function SettingsPage() {
       try {
         setLoading(true)
         
-        // 获取当前会话
-        const { data: { session } } = await supabase.auth.getSession()
+        // 使用NextAuth获取会话
+        const session = await getSession()
         
         if (!session) {
           toast({
