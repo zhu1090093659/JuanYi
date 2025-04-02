@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowLeft, Save, FileText, Upload, AlertCircle, FileIcon } from "lucide-react"
+import { ArrowLeft, Save, FileText, Upload, AlertCircle, FileIcon, X, Plus } from "lucide-react"
 import { supabase } from "@/lib/supabase/client"
 import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
@@ -37,12 +37,12 @@ export default function NewExamPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [subjects, setSubjects] = useState<any[]>([])
   const [examFile, setExamFile] = useState<File | null>(null)
-  const [answerFile, setAnswerFile] = useState<File | null>(null)
+  const [examImages, setExamImages] = useState<File[]>([])
   const [isParsingFile, setIsParsingFile] = useState(false)
   const [parseError, setParseError] = useState<string | null>(null)
   const [questions, setQuestions] = useState<any[]>([])
   const examFileInputRef = useRef<HTMLInputElement>(null)
-  const answerFileInputRef = useRef<HTMLInputElement>(null)
+  const examImagesInputRef = useRef<HTMLInputElement>(null)
   
   const [formData, setFormData] = useState({
     name: "",
@@ -92,23 +92,99 @@ export default function NewExamPage() {
   const handleExamFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
-      setExamFile(file);
-      
+      // 如果是图片文件，添加到图片列表中
+      if (file.type.startsWith('image/')) {
+        setExamImages(prev => [...prev, file]);
+        // 清空单文件选择
+        setExamFile(null);
+        toast({
+          title: "图片已添加",
+          description: `已添加图片: ${file.name}`,
+        });
+      } else {
+        // 清空图片列表
+        setExamImages([]);
+        setExamFile(file);
+        toast({
+          title: "文件已选择",
+          description: `试卷文件: ${file.name}`,
+        });
+      }
+    }
+  }
+
+  // 处理多图片上传
+  const handleExamImagesChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const newImages = Array.from(e.target.files).filter(file => file.type.startsWith('image/'));
+      if (newImages.length > 0) {
+        setExamImages(prev => [...prev, ...newImages]);
+        // 清空单文件选择
+        setExamFile(null);
+        toast({
+          title: "图片已添加",
+          description: `已添加${newImages.length}张图片`,
+        });
+      }
+    }
+  }
+
+  // 移除某张图片
+  const removeImage = (index: number) => {
+    setExamImages(prev => prev.filter((_, i) => i !== index));
+  }
+
+  // 处理图片选择按钮点击
+  const handleImagesClick = () => {
+    examImagesInputRef.current?.click();
+  }
+
+  // 将图片转换为Base64
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          // 返回base64字符串，去掉前缀
+          resolve(reader.result);
+        } else {
+          reject(new Error('Failed to convert file to base64'));
+        }
+      };
+      reader.onerror = error => reject(error);
+    });
+  }
+
+  // 添加新的解析试卷函数
+  const parseExamFile = async () => {
+    if (!examFile && examImages.length === 0) {
       toast({
-        title: "文件已选择",
-        description: `试卷文件: ${file.name}`,
+        title: "请先上传试卷",
+        description: "请先选择并上传试卷文件或试卷图片",
+        variant: "destructive",
       });
+      return;
+    }
+
+    try {
+      // 开始解析
+      setIsParsingFile(true);
+      setParseError(null);
       
-      // 检查文件类型，支持解析的格式
-      const fileType = file.name.split('.').pop()?.toLowerCase();
-      if (fileType === 'txt' || fileType === 'pdf' || fileType === 'docx') {
-        try {
-          // 开始解析文件
-          setIsParsingFile(true);
-          setParseError(null);
-          
+      const apiKey = localStorage.getItem("openai_api_key");
+      if (!apiKey) {
+        throw new Error("未设置API Key，请先在设置中配置OpenAI API Key");
+      }
+      
+      const model = localStorage.getItem("openai_model") || "gpt-4o";
+      
+      if (examFile) {
+        // 处理文档文件 (PDF, DOCX, TXT)
+        const fileType = examFile.name.split('.').pop()?.toLowerCase();
+        if (fileType === 'txt' || fileType === 'pdf' || fileType === 'docx') {
           // 提取文件文本
-          const fileContent = await extractTextFromFile(file);
+          const fileContent = await extractTextFromFile(examFile);
           
           // 调用API解析试卷
           const response = await fetch('/api/exam-parser', {
@@ -118,8 +194,8 @@ export default function NewExamPage() {
             },
             body: JSON.stringify({ 
               fileContent,
-              apiKey: localStorage.getItem("openai_api_key"),
-              model: localStorage.getItem("openai_model") || "gpt-4o"
+              apiKey,
+              model
             }),
           });
           
@@ -135,43 +211,58 @@ export default function NewExamPage() {
             ...prev,
             total_score: result.totalScore
           }));
-          
-          toast({
-            title: "试卷解析成功",
-            description: `成功解析出${result.questions.length}道题目`,
-          });
-          
-          // 自动切换到题目列表标签
-          setActiveTab("questions");
-        } catch (error: any) {
-          console.error("试卷解析错误:", error);
-          setParseError(error.message || '试卷解析失败');
-          toast({
-            title: "试卷解析失败",
-            description: error.message || '无法解析试卷文件',
-            variant: "destructive",
-          });
-        } finally {
-          setIsParsingFile(false);
+        } else {
+          throw new Error(`不支持的文件格式: ${fileType || '未知'}`);
         }
-      } else {
-        setParseError(`不支持的文件格式: ${fileType || '未知'}`);
-        toast({
-          title: "不支持的文件格式",
-          description: `目前仅支持PDF、DOCX和TXT格式`,
-          variant: "destructive",
+      } else if (examImages.length > 0) {
+        // 处理图片文件
+        // 将图片转换为base64编码
+        const base64Images = await Promise.all(examImages.map(fileToBase64));
+        
+        // 调用多模态API解析图片
+        const response = await fetch('/api/exam-parser-multimodal', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            images: base64Images,
+            apiKey,
+            model
+          }),
         });
+        
+        const result = await response.json();
+        
+        if (!response.ok || !result.success) {
+          throw new Error(result.error || '试卷图片解析失败');
+        }
+        
+        // 更新试卷数据
+        setQuestions(result.questions);
+        setFormData(prev => ({
+          ...prev,
+          total_score: result.totalScore
+        }));
       }
-    }
-  }
-
-  const handleAnswerFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setAnswerFile(e.target.files[0])
+      
       toast({
-        title: "文件已选择",
-        description: `答案文件: ${e.target.files[0].name}`,
-      })
+        title: "试卷解析成功",
+        description: `成功解析出${questions.length}道题目`,
+      });
+      
+      // 自动切换到题目列表标签
+      setActiveTab("questions");
+    } catch (error: any) {
+      console.error("试卷解析错误:", error);
+      setParseError(error.message || '试卷解析失败');
+      toast({
+        title: "试卷解析失败",
+        description: error.message || '无法解析试卷',
+        variant: "destructive",
+      });
+    } finally {
+      setIsParsingFile(false);
     }
   }
 
@@ -179,10 +270,6 @@ export default function NewExamPage() {
     examFileInputRef.current?.click()
   }
   
-  const handleAnswerFileClick = () => {
-    answerFileInputRef.current?.click()
-  }
-
   const handleSubmit = async () => {
     if (!formData.name || !formData.subject_id || !formData.grade) {
       toast({
@@ -226,7 +313,7 @@ export default function NewExamPage() {
       if (data && data[0]) {
         const examId = data[0].id
         
-        // 上传试卷文件
+        // 上传试卷文件或图片
         if (examFile) {
           const examFilePath = `exams/${examId}/exam_file_${examFile.name}`
           const { error: uploadError } = await supabase.storage
@@ -243,20 +330,24 @@ export default function NewExamPage() {
           }
         }
         
-        // 上传答案文件
-        if (answerFile) {
-          const answerFilePath = `exams/${examId}/answer_file_${answerFile.name}`
-          const { error: uploadError } = await supabase.storage
-            .from('exam_files')
-            .upload(answerFilePath, answerFile)
+        // 上传多张试卷图片
+        if (examImages.length > 0) {
+          for (let i = 0; i < examImages.length; i++) {
+            const image = examImages[i];
+            const imagePath = `exams/${examId}/exam_image_${i+1}_${image.name}`;
             
-          if (uploadError) {
-            console.error("答案文件上传失败:", uploadError)
-            toast({
-              title: "答案文件上传失败",
-              description: uploadError.message,
-              variant: "destructive",
-            })
+            const { error: uploadError } = await supabase.storage
+              .from('exam_files')
+              .upload(imagePath, image);
+              
+            if (uploadError) {
+              console.error(`试卷图片 ${i+1} 上传失败:`, uploadError);
+              toast({
+                title: `试卷图片 ${i+1} 上传失败`,
+                description: uploadError.message,
+                variant: "destructive",
+              });
+            }
           }
         }
         
@@ -444,7 +535,7 @@ export default function NewExamPage() {
           <Card>
             <CardHeader>
               <CardTitle>上传试卷</CardTitle>
-              <CardDescription>上传试卷文件和答案模板</CardDescription>
+              <CardDescription>上传试卷文件或拍照图片，试卷中应包含标准答案</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               {/* 隐藏的文件输入框 */}
@@ -452,34 +543,53 @@ export default function NewExamPage() {
                 type="file"
                 ref={examFileInputRef}
                 className="hidden"
-                accept=".pdf,.docx,.txt"
+                accept=".pdf,.docx,.txt,image/*"
                 onChange={handleExamFileChange}
               />
               <input
                 type="file"
-                ref={answerFileInputRef}
+                ref={examImagesInputRef}
                 className="hidden"
-                accept=".pdf,.docx,.txt"
-                onChange={handleAnswerFileChange}
+                accept="image/*"
+                multiple
+                onChange={handleExamImagesChange}
               />
               
               <div className="grid w-full items-center gap-4">
-                <Label htmlFor="exam-file">试卷文件</Label>
-                <div
-                  className={`flex flex-col items-center justify-center border-2 border-dashed rounded-md p-6 ${
-                    examFile ? "border-primary" : "border-border"
-                  }`}
-                >
-                  {examFile ? (
+                <Label htmlFor="exam-file">试卷文件或图片</Label>
+                
+                {/* 已上传文件预览区域 */}
+                {examFile ? (
+                  <div
+                    className="flex flex-col items-center justify-center border-2 border-dashed rounded-md p-6 border-primary"
+                  >
                     <div className="flex flex-col items-center text-center">
                       <FileIcon className="h-8 w-8 text-primary mb-2" />
                       <p className="font-medium">{examFile.name}</p>
                       <p className="text-sm text-muted-foreground">
                         {(examFile.size / 1024 / 1024).toFixed(2)} MB
                       </p>
-                      <Button variant="outline" onClick={handleExamFileClick} className="mt-2">
-                        更换文件
-                      </Button>
+                      <div className="flex mt-2 gap-2">
+                        <Button variant="outline" onClick={handleExamFileClick}>
+                          更换文件
+                        </Button>
+                        <Button 
+                          onClick={parseExamFile} 
+                          disabled={isParsingFile}
+                        >
+                          {isParsingFile ? (
+                            <>
+                              <Spinner className="mr-2 h-4 w-4" />
+                              解析中...
+                            </>
+                          ) : (
+                            <>
+                              <FileText className="mr-2 h-4 w-4" />
+                              开始解析
+                            </>
+                          )}
+                        </Button>
+                      </div>
                       
                       {/* 文件预览区域 */}
                       <div className="mt-4 w-full max-w-3xl">
@@ -495,67 +605,88 @@ export default function NewExamPage() {
                         </EnvProvider>
                       </div>
                     </div>
-                  ) : (
-                    <>
-                      <p className="text-muted-foreground">上传试卷文件 (支持PDF、Word文档)</p>
-                      <Button variant="outline" className="mt-4" onClick={handleExamFileClick}>
+                  </div>
+                ) : examImages.length > 0 ? (
+                  <div
+                    className="flex flex-col items-center justify-center border-2 border-dashed rounded-md p-6 border-primary"
+                  >
+                    <div className="w-full">
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="font-medium">已上传 {examImages.length} 张试卷图片</h3>
+                        <div className="flex gap-2">
+                          <Button variant="outline" size="sm" onClick={handleImagesClick}>
+                            <Plus className="h-4 w-4 mr-1" />添加图片
+                          </Button>
+                          <Button 
+                            size="sm"
+                            onClick={parseExamFile} 
+                            disabled={isParsingFile}
+                          >
+                            {isParsingFile ? (
+                              <>
+                                <Spinner className="mr-2 h-4 w-4" />
+                                解析中...
+                              </>
+                            ) : (
+                              <>
+                                <FileText className="mr-2 h-4 w-4" />
+                                开始解析
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        {examImages.map((image, index) => (
+                          <div key={index} className="relative group">
+                            <img 
+                              src={URL.createObjectURL(image)} 
+                              alt={`试卷图片 ${index + 1}`}
+                              className="w-full h-auto object-cover rounded-md border"
+                            />
+                            <Button
+                              variant="destructive"
+                              size="icon"
+                              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={() => removeImage(index)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                            <p className="text-xs text-center mt-1">
+                              {image.name.length > 20 
+                                ? image.name.substring(0, 20) + '...' 
+                                : image.name}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                      
+                      <p className="text-sm text-muted-foreground mt-4 text-center">
+                        提示: 请确保图片清晰可见，包含完整试卷内容和标准答案
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    className="flex flex-col items-center justify-center border-2 border-dashed rounded-md p-6 border-border"
+                  >
+                    <p className="text-muted-foreground">上传试卷文件 (支持PDF、Word文档) 或试卷照片</p>
+                    <p className="text-muted-foreground mt-2">请确保试卷中包含标准答案</p>
+                    <div className="flex mt-4 gap-2">
+                      <Button variant="outline" onClick={handleExamFileClick}>
                         <Upload className="mr-2 h-4 w-4" />
                         选择文件
                       </Button>
-                    </>
-                  )}
-                </div>
+                      <Button onClick={handleImagesClick}>
+                        <Upload className="mr-2 h-4 w-4" />
+                        上传试卷照片
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
               
-              <div className="grid w-full items-center gap-4">
-                <Label htmlFor="answer-file">标准答案</Label>
-                <div
-                  className={`flex flex-col items-center justify-center border-2 border-dashed rounded-md p-6 ${
-                    answerFile ? "border-primary" : "border-border"
-                  }`}
-                >
-                  {answerFile ? (
-                    <div className="flex flex-col items-center text-center">
-                      <FileIcon className="h-8 w-8 text-primary mb-2" />
-                      <p className="font-medium">{answerFile.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {(answerFile.size / 1024 / 1024).toFixed(2)} MB
-                      </p>
-                      <Button variant="outline" onClick={handleAnswerFileClick} className="mt-2">
-                        更换文件
-                      </Button>
-                      
-                      {/* 答案文件预览 */}
-                      <div className="mt-4 w-full max-w-3xl">
-                        <EnvProvider>
-                          <ClientOnly>
-                            {answerFile.type === 'application/pdf' && (
-                              <PDFViewer file={answerFile} className="w-full" />
-                            )}
-                            {answerFile.name.endsWith('.docx') && (
-                              <DocxViewer file={answerFile} className="w-full" />
-                            )}
-                          </ClientOnly>
-                        </EnvProvider>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <p className="text-muted-foreground">上传标准答案或答题卡模板 (支持PDF、Word文档)</p>
-                      <Button variant="outline" className="mt-4" onClick={handleAnswerFileClick}>
-                        <Upload className="mr-2 h-4 w-4" />
-                        选择文件
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </div>
-              {isParsingFile && (
-                <div className="flex items-center justify-center p-4">
-                  <Spinner className="mr-2" />
-                  <p>正在解析试卷文件...</p>
-                </div>
-              )}
               {parseError && (
                 <Alert variant="destructive" className="mt-4">
                   <AlertTitle>解析错误</AlertTitle>
@@ -624,7 +755,10 @@ export default function NewExamPage() {
                           {question.options.map((option: string, optIndex: number) => (
                             <div key={optIndex} className="flex items-start">
                               <span className="font-medium mr-2">{String.fromCharCode(65 + optIndex)}.</span>
-                              <p className="whitespace-pre-wrap">{option}</p>
+                              <p className="whitespace-pre-wrap">{
+                                // 预处理选项内容，移除可能存在的选项序号
+                                option.replace(/^[A-Z]\.?\s+/i, '')
+                              }</p>
                             </div>
                           ))}
                         </div>

@@ -25,9 +25,9 @@ const initWorker = async () => {
     // 导入react-pdf库中的pdfjs
     const { pdfjs } = await import('react-pdf')
     
-    // 配置worker - 使用固定版本而不是动态版本
+    // 配置worker - 使用动态版本号以匹配实际安装的版本
     if (pdfjs) {
-      pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/build/pdf.worker.min.js`
+      pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`
       return true
     }
     return false
@@ -53,9 +53,9 @@ export default function PDFViewer({ file, className = '' }: PDFViewerProps) {
 
   // 使用useMemo来缓存options对象，防止不必要的重新渲染
   const pdfOptions = useMemo(() => ({
-    cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/cmaps/',
+    cMapUrl: 'https://unpkg.com/pdfjs-dist/cmaps/',
     cMapPacked: true,
-    standardFontDataUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/standard_fonts/'
+    standardFontDataUrl: 'https://unpkg.com/pdfjs-dist/standard_fonts/'
   }), []);
 
   // 初始化PDF worker
