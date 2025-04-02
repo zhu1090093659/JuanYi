@@ -143,7 +143,8 @@ ${processedContent}
               { role: "system", content: "你是一个专业的试卷解析助手，擅长将试卷内容转换为结构化数据。" },
               { role: "user", content: prompt }
             ],
-            temperature: 0.2, // 使用较低的温度以获得更确定性的输出
+            temperature: 0.3, // 使用较低的温度以获得更确定性的输出
+            max_tokens: 128000,
           });
 
           // 提取回答内容
@@ -424,8 +425,8 @@ export async function parseExamWithMultimodalAI(
                 content: userContent
               }
             ],
-            temperature: 0.2,
-            max_tokens: 4000,
+            temperature: 0.3, // 使用较低的温度以获得更确定性的输出
+            max_tokens: 128000,
           });
 
           // 提取回答内容
