@@ -21,11 +21,29 @@ export function getOpenAIClient(apiKey: string) {
 }
 
 /**
+ * 将旧的题目类型映射到新的类型
+ */
+const mapQuestionType = (oldType: string): 'objective' | 'subjective' | 'calculation' | 'essay' => {
+  switch (oldType.toLowerCase()) {
+    case 'choice':
+    case 'multichoice':
+    case 'fill':
+      return 'objective'
+    case 'shortanswer':
+      return 'subjective'
+    case 'essay':
+      return 'essay'
+    default:
+      return 'objective'
+  }
+}
+
+/**
  * 试卷题目的数据结构
  */
 export interface ExamQuestion {
   id: string;
-  type: 'choice' | 'multiChoice' | 'fill' | 'shortAnswer' | 'essay';
+  type: 'objective' | 'subjective' | 'calculation' | 'essay';
   content: string;
   options?: string[];
   answer: string;
@@ -92,9 +110,9 @@ export async function parseExamWithAI(
 你是一个专业的试卷解析助手。请分析以下试卷内容，并提取所有题目、答案和分值信息。
 将结果格式化为JSON数组，每个题目包含以下字段：
 - id: 题号（字符串）
-- type: 题型（'choice'=单选题, 'multiChoice'=多选题, 'fill'=填空题, 'shortAnswer'=简答题, 'essay'=作文/论述题）
+- type: 题型（'objective'=客观题, 'subjective'=主观题, 'calculation'=计算题, 'essay'=论述题）
 - content: 题目内容
-- options: 选项数组（仅适用于选择题）
+- options: 选项数组（仅适用于客观题）
 - answer: 标准答案
 - score: 分值（数字）
 
@@ -103,7 +121,7 @@ ${processedContent}
 
 注意：
 1. 请只处理试卷内容，不要包含其他文本。
-2. 对于选择题，提取选项内容时，请不要包含选项序号（如A、B、C、D等）。例如，若原始选项为"A. 这是一个选项"，则只提取"这是一个选项"作为选项内容。
+2. 对于客观题，提取选项内容时，请不要包含选项序号（如A、B、C、D等）。例如，若原始选项为"A. 这是一个选项"，则只提取"这是一个选项"作为选项内容。
 3. 答案中如需提及选项，可使用选项序号，如"A"、"B"、"C"、"D"等。
 4. 必须返回严格有效的JSON格式，确保所有属性名都用双引号包围，字符串值也用双引号包围。
 5. 不要在JSON外添加任何文本或说明，只返回JSON数组。
@@ -112,7 +130,7 @@ ${processedContent}
 [
   {
     "id": "1",
-    "type": "choice",
+    "type": "objective",
     "content": "题目内容",
     "options": ["选项1", "选项2", "选项3", "选项4"],
     "answer": "A",
@@ -120,7 +138,7 @@ ${processedContent}
   },
   {
     "id": "2",
-    "type": "shortAnswer",
+    "type": "subjective",
     "content": "题目内容",
     "answer": "标准答案",
     "score": 5
@@ -203,7 +221,24 @@ ${processedContent}
             
             try {
               // 尝试解析JSON
-              questions = JSON.parse(jsonText);
+              const parsedQuestions = JSON.parse(jsonText);
+              questions = parsedQuestions.map((question: any) => {
+                const formattedQuestion: ExamQuestion = {
+                  id: String(question.id),
+                  type: mapQuestionType(question.type),
+                  content: question.content,
+                  answer: question.answer || '',
+                  score: parseFloat(String(question.score)) || 0
+                };
+
+                // 只为客观题添加选项
+                if (formattedQuestion.type === 'objective' && Array.isArray(question.options)) {
+                  formattedQuestion.options = question.options;
+                }
+
+                totalScore += formattedQuestion.score;
+                return formattedQuestion;
+              });
               console.log("JSON解析成功");
             } catch (parseError: any) {
               console.error("标准JSON解析失败，尝试使用AI修复:", parseError);
@@ -231,7 +266,24 @@ ${processedContent}
                 }
                 
                 // 解析修复后的JSON
-                questions = JSON.parse(result.fixedJson);
+                const fixedQuestions = JSON.parse(result.fixedJson);
+                questions = fixedQuestions.map((question: any) => {
+                  const formattedQuestion: ExamQuestion = {
+                    id: String(question.id),
+                    type: mapQuestionType(question.type),
+                    content: question.content,
+                    answer: question.answer || '',
+                    score: parseFloat(String(question.score)) || 0
+                  };
+
+                  // 只为客观题添加选项
+                  if (formattedQuestion.type === 'objective' && Array.isArray(question.options)) {
+                    formattedQuestion.options = question.options;
+                  }
+
+                  totalScore += formattedQuestion.score;
+                  return formattedQuestion;
+                });
                 console.log("使用AI修复的JSON解析成功");
               } catch (fixError: any) {
                 console.error("AI修复JSON失败:", fixError);
@@ -246,26 +298,27 @@ ${processedContent}
                 fixedJson = fixedJson.replace(/(\w+):/g, "\"$1\":");
                 
                 // 尝试解析修复后的JSON
-                questions = JSON.parse(fixedJson);
+                const fixedQuestions = JSON.parse(fixedJson);
+                questions = fixedQuestions.map((question: any) => {
+                  const formattedQuestion: ExamQuestion = {
+                    id: String(question.id),
+                    type: mapQuestionType(question.type),
+                    content: question.content,
+                    answer: question.answer || '',
+                    score: parseFloat(String(question.score)) || 0
+                  };
+
+                  // 只为客观题添加选项
+                  if (formattedQuestion.type === 'objective' && Array.isArray(question.options)) {
+                    formattedQuestion.options = question.options;
+                  }
+
+                  totalScore += formattedQuestion.score;
+                  return formattedQuestion;
+                });
                 console.log("基本修复后的JSON解析成功");
               }
             }
-            
-            // 对选项内容进行预处理，确保不包含选项序号
-            questions = questions.map(q => {
-              // 对选择题进行处理
-              if ((q.type === 'choice' || q.type === 'multiChoice') && Array.isArray(q.options)) {
-                // 移除选项内容中可能存在的选项序号
-                q.options = q.options.map(opt => 
-                  typeof opt === 'string' ? opt.replace(/^[A-Z]\.?\s+/i, '') : opt
-                );
-              }
-              return q;
-            });
-            
-            // 计算总分
-            totalScore = questions.reduce((sum, q) => sum + (q.score || 0), 0);
-            console.log(`成功解析出 ${questions.length} 道题目，总分: ${totalScore}`);
           } catch (jsonError) {
             console.error("AI返回的JSON解析失败:", jsonError);
             console.error("原始响应内容:", responseText);
@@ -485,7 +538,24 @@ export async function parseExamWithMultimodalAI(
             
             try {
               // 尝试解析JSON
-              questions = JSON.parse(jsonText);
+              const parsedQuestions = JSON.parse(jsonText);
+              questions = parsedQuestions.map((question: any) => {
+                const formattedQuestion: ExamQuestion = {
+                  id: String(question.id),
+                  type: mapQuestionType(question.type),
+                  content: question.content,
+                  answer: question.answer || '',
+                  score: parseFloat(String(question.score)) || 0
+                };
+
+                // 只为客观题添加选项
+                if (formattedQuestion.type === 'objective' && Array.isArray(question.options)) {
+                  formattedQuestion.options = question.options;
+                }
+
+                totalScore += formattedQuestion.score;
+                return formattedQuestion;
+              });
               console.log("JSON解析成功");
             } catch (parseError: any) {
               console.error("标准JSON解析失败，尝试使用AI修复:", parseError);
@@ -513,7 +583,24 @@ export async function parseExamWithMultimodalAI(
                 }
                 
                 // 解析修复后的JSON
-                questions = JSON.parse(result.fixedJson);
+                const fixedQuestions = JSON.parse(result.fixedJson);
+                questions = fixedQuestions.map((question: any) => {
+                  const formattedQuestion: ExamQuestion = {
+                    id: String(question.id),
+                    type: mapQuestionType(question.type),
+                    content: question.content,
+                    answer: question.answer || '',
+                    score: parseFloat(String(question.score)) || 0
+                  };
+
+                  // 只为客观题添加选项
+                  if (formattedQuestion.type === 'objective' && Array.isArray(question.options)) {
+                    formattedQuestion.options = question.options;
+                  }
+
+                  totalScore += formattedQuestion.score;
+                  return formattedQuestion;
+                });
                 console.log("使用AI修复的JSON解析成功");
               } catch (fixError: any) {
                 console.error("AI修复JSON失败:", fixError);
@@ -528,26 +615,27 @@ export async function parseExamWithMultimodalAI(
                 fixedJson = fixedJson.replace(/(\w+):/g, "\"$1\":");
                 
                 // 尝试解析修复后的JSON
-                questions = JSON.parse(fixedJson);
+                const fixedQuestions = JSON.parse(fixedJson);
+                questions = fixedQuestions.map((question: any) => {
+                  const formattedQuestion: ExamQuestion = {
+                    id: String(question.id),
+                    type: mapQuestionType(question.type),
+                    content: question.content,
+                    answer: question.answer || '',
+                    score: parseFloat(String(question.score)) || 0
+                  };
+
+                  // 只为客观题添加选项
+                  if (formattedQuestion.type === 'objective' && Array.isArray(question.options)) {
+                    formattedQuestion.options = question.options;
+                  }
+
+                  totalScore += formattedQuestion.score;
+                  return formattedQuestion;
+                });
                 console.log("基本修复后的JSON解析成功");
               }
             }
-            
-            // 对选项内容进行预处理，确保不包含选项序号
-            questions = questions.map(q => {
-              // 对选择题进行处理
-              if ((q.type === 'choice' || q.type === 'multiChoice') && Array.isArray(q.options)) {
-                // 移除选项内容中可能存在的选项序号
-                q.options = q.options.map(opt => 
-                  typeof opt === 'string' ? opt.replace(/^[A-Z]\.?\s+/i, '') : opt
-                );
-              }
-              return q;
-            });
-            
-            // 计算总分
-            totalScore = questions.reduce((sum, q) => sum + (q.score || 0), 0);
-            console.log(`成功解析出 ${questions.length} 道题目，总分: ${totalScore}`);
           } catch (jsonError) {
             console.error("AI返回的JSON解析失败:", jsonError);
             console.error("原始响应内容:", responseText);
@@ -768,3 +856,15 @@ ${processedJson}
     throw new Error(`无法修复JSON格式: ${error.message}`);
   }
 }
+
+/**
+ * 解析Word文档中的题目
+ * 题目格式要求:
+ * ```
+ * 1. 题目内容
+ * - type: 题型（'objective'=客观题, 'subjective'=主观题, 'calculation'=计算题, 'essay'=论述题）
+ * - score: 分值
+ * - answer: 答案
+ * - options: 选项（如果是客观题）
+ * ```
+ */

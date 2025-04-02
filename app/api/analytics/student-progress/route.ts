@@ -13,8 +13,7 @@ export async function GET(request: Request) {
     const { data: students, error: studentError } = await supabase
       .from("users")
       .select("id, name")
-      .eq("role", "student")
-      .limit(10);
+      .eq("role", "student");
 
     if (studentError) {
       console.error("Error fetching students:", studentError);

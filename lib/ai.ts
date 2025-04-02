@@ -1,5 +1,6 @@
 import { generateText } from "ai"
 import { openai } from "@ai-sdk/openai"
+import OpenAI from 'openai'
 
 // Types for grading results
 export interface GradingResult {
@@ -17,6 +18,101 @@ interface ScoringPoint {
 
 // 创建 GPT-4o 模型实例
 export const gpt4o = openai("gpt-4o")
+
+/**
+ * 初始化OpenAI客户端
+ * 使用提供的API密钥和API基础URL
+ */
+export function getOpenAIClient(apiKey: string) {
+  // 如果没有API密钥，抛出错误
+  if (!apiKey) {
+    throw new Error("未设置OpenAI API密钥。请在设置页面配置您的API密钥。");
+  }
+
+  // 创建OpenAI客户端实例，设置更长的超时时间
+  return new OpenAI({
+    apiKey,
+    baseURL: 'https://chatwithai.icu/v1',
+    timeout: 360000, // 360秒超时
+    maxRetries: 3, // 最多重试3次
+  });
+}
+
+/**
+ * 使用AI修复JSON格式
+ * @param brokenJson 格式错误的JSON字符串
+ * @param errorMessage 解析错误信息
+ * @param apiKey OpenAI API密钥
+ * @param model OpenAI模型名称
+ * @returns 修复后的JSON字符串
+ */
+export async function fixJsonWithAI(
+  brokenJson: string, 
+  errorMessage: string, 
+  apiKey: string,
+  model: string = "gpt-4o"
+): Promise<string> {
+  try {
+    const openai = getOpenAIClient(apiKey);
+    
+    // 预处理JSON，截断过长内容
+    let processedJson = brokenJson;
+    if (brokenJson.length > 100000) {
+      // 如果内容过长，裁剪一部分
+      processedJson = brokenJson.substring(0, 50000) + "\n...[内容过长已截断]...";
+    }
+    
+    // 构建提示词
+    const prompt = `
+我需要你帮助修复一个格式错误的JSON字符串。这个字符串应该包含试卷评分结果，但解析失败了。
+
+解析错误信息: ${errorMessage}
+
+需要修复的JSON:
+${processedJson}
+
+你的任务是返回一个有效的、格式正确的JSON对象，使其符合评分结果的格式要求。
+
+仅返回修复后的JSON，不要添加任何解释、注释或代码块标记。确保所有属性名和字符串值都使用双引号，JSON格式完全符合标准。
+`;
+
+    // 调用OpenAI API
+    const completion = await openai.chat.completions.create({
+      model,
+      messages: [
+        { role: "system", content: "你是一个专业的JSON修复专家，擅长修复格式错误的JSON。" },
+        { role: "user", content: prompt }
+      ],
+      temperature: 0.3,
+      max_tokens: 128000,
+    });
+
+    // 提取回答内容
+    const responseText = completion.choices[0]?.message?.content || '';
+    
+    // 尝试提取有效的JSON
+    if (responseText.trim().startsWith('{') && responseText.trim().endsWith('}')) {
+      // 验证是否为有效JSON
+      JSON.parse(responseText); // 如果无效会抛出异常
+      return responseText;
+    }
+    
+    // 尝试提取花括号包围的部分
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const jsonText = jsonMatch[0];
+      // 验证提取的部分是否为有效JSON
+      JSON.parse(jsonText); // 如果无效会抛出异常
+      return jsonText;
+    }
+    
+    // 如果以上方法都失败，抛出错误
+    throw new Error("无法提取有效的JSON对象");
+  } catch (error: any) {
+    console.error("JSON修复失败:", error);
+    throw new Error(`无法修复JSON格式: ${error.message}`);
+  }
+}
 
 // 评分提示模板
 const gradingPromptTemplate = (question: string, standardAnswer: string, studentAnswer: string, totalScore: number) => `
@@ -51,6 +147,8 @@ const gradingPromptTemplate = (question: string, standardAnswer: string, student
  * @param standardAnswer The standard/model answer
  * @param studentAnswer The student's answer to evaluate
  * @param maxScore The maximum possible score for this question
+ * @param model OpenAI模型名称，默认为gpt-4o
+ * @param apiKey OpenAI API密钥，如果提供则使用自定义客户端
  * @returns GradingResult with score, confidence, feedback and scoring points
  */
 export async function gradeAnswer(
@@ -58,6 +156,8 @@ export async function gradeAnswer(
   standardAnswer: string,
   studentAnswer: string,
   maxScore: number,
+  model: string = "gpt-4o",
+  apiKey?: string,
 ): Promise<GradingResult> {
   try {
     // Create a detailed prompt for the AI
@@ -97,13 +197,32 @@ Return your evaluation in the following JSON format:
 }
 `
 
-    // Use the AI SDK to generate the evaluation
-    const { text } = await generateText({
-      model: openai("gpt-4o"),
-      prompt,
-      temperature: 0.2, // Lower temperature for more consistent results
-      maxTokens: 1000,
-    })
+    let text: string;
+    
+    // 根据是否提供了API密钥决定使用哪种方式调用API
+    if (apiKey) {
+      // 使用自定义OpenAI客户端
+      const openaiClient = getOpenAIClient(apiKey);
+      const completion = await openaiClient.chat.completions.create({
+        model,
+        messages: [
+          { role: "system", content: "你是一个专业的教育评分助手，可以精确评估学生答案。" },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.3,
+        max_tokens: 128000,
+      });
+      text = completion.choices[0]?.message?.content || '';
+    } else {
+      // 使用AI SDK
+      const { text: resultText } = await generateText({
+        model: openai(model),
+        prompt,
+        temperature: 0.3,
+        maxTokens: 128000,
+      });
+      text = resultText;
+    }
 
     // Parse the response
     try {
@@ -114,7 +233,22 @@ Return your evaluation in the following JSON format:
       }
 
       const jsonStr = jsonMatch[0]
-      const result = JSON.parse(jsonStr)
+      let result;
+      
+      try {
+        result = JSON.parse(jsonStr);
+      } catch (parseError: any) {
+        console.error("第一次解析AI返回的JSON失败，尝试使用AI修复:", parseError);
+        
+        // 如果有提供API密钥，使用AI修复JSON
+        if (apiKey) {
+          const fixedJson = await fixJsonWithAI(jsonStr, parseError.message, apiKey, model);
+          result = JSON.parse(fixedJson);
+          console.log("使用AI修复后的JSON解析成功");
+        } else {
+          throw parseError; // 如果没有API密钥，则直接抛出解析错误
+        }
+      }
 
       // Validate the result structure
       if (
@@ -146,12 +280,12 @@ Return your evaluation in the following JSON format:
       return {
         score: 0,
         confidence: 30,
-        feedback: "Unable to evaluate this answer. Please review manually.",
+        feedback: "无法评估此答案。请手动审核。",
         scoringPoints: JSON.stringify([
           {
-            point: "AI Evaluation Error",
+            point: "AI评估错误",
             status: "incorrect",
-            comment: "The AI was unable to properly evaluate this answer. Please review manually.",
+            comment: "AI无法正确评估此答案。请手动审核。",
           },
         ]),
       }
@@ -168,6 +302,8 @@ export async function generateFeedback(
   subject: string,
   strengths: string[],
   weaknesses: string[],
+  model: string = "gpt-4o",
+  apiKey?: string,
 ) {
   const prompt = `
 为学生 ${studentName} 生成一份关于 ${subject} 科目的个性化学习反馈。
@@ -181,84 +317,303 @@ ${weaknesses.map((w) => `- ${w}`).join("\n")}
 请提供鼓励性的反馈和具体的改进建议。
 `
 
-  const { text } = await generateText({
-    model: gpt4o,
-    prompt,
-    temperature: 0.7,
-  })
-
-  return text
+  if (apiKey) {
+    // 使用自定义OpenAI客户端
+    const openaiClient = getOpenAIClient(apiKey);
+    const completion = await openaiClient.chat.completions.create({
+      model,
+      messages: [
+        { role: "system", content: "你是一个专业的教育反馈助手，擅长提供有建设性的学习建议。" },
+        { role: "user", content: prompt }
+      ],
+      temperature: 0.3,
+      max_tokens: 128000,
+    });
+    return completion.choices[0]?.message?.content || '';
+  } else {
+    // 使用AI SDK
+    const { text } = await generateText({
+      model: openai(model),
+      prompt,
+      temperature: 0.3,
+      maxTokens: 128000,
+    });
+    return text;
+  }
 }
 
 /**
- * Batch grade multiple answers for an exam
+ * 一次性评分整个试卷的所有问题
  *
- * @param examId The ID of the exam to grade
- * @param questions Array of questions with their standard answers
- * @param answers Array of student answers
- * @returns Array of grading results
+ * @param examId 考试ID
+ * @param questions 考试中的所有问题及其标准答案
+ * @param studentId 学生ID
+ * @param studentAnswers 学生对应每个问题的答案
+ * @param model OpenAI模型名称，默认为gpt-4o
+ * @param apiKey OpenAI API密钥，如果提供则使用自定义客户端
+ * @returns 包含所有题目评分结果的数组
  */
-export async function batchGradeAnswers(
+export async function gradeExam(
   examId: string,
   questions: Array<{ id: string; content: string; standard_answer: string; score: number }>,
-  answers: Array<{ question_id: string; student_id: string; content: string }>,
-): Promise<Array<{ questionId: string; studentId: string; result: GradingResult }>> {
-  const results = []
+  studentId: string,
+  studentAnswers: Array<{ question_id: string; content: string }>,
+  model: string = "gpt-4o",
+  apiKey?: string,
+): Promise<Array<{ questionId: string; result: GradingResult }>> {
+  try {
+    // 构建一个详细的提示，包含整个试卷的所有问题和答案
+    const questionsWithAnswers = questions.map(question => {
+      const studentAnswer = studentAnswers.find(a => a.question_id === question.id);
+      return {
+        id: question.id,
+        question: question.content,
+        standardAnswer: question.standard_answer,
+        studentAnswer: studentAnswer ? studentAnswer.content : "",
+        maxScore: question.score
+      };
+    });
 
-  // Process answers in batches to avoid rate limiting
-  const batchSize = 5
-  for (let i = 0; i < answers.length; i += batchSize) {
-    const batch = answers.slice(i, i + batchSize)
+    const prompt = `
+你是一位专业的教育评分助手。请为以下试卷的所有问题进行评分。
 
-    // Process each answer in the batch concurrently
-    const batchResults = await Promise.all(
-      batch.map(async (answer) => {
-        const question = questions.find((q) => q.id === answer.question_id)
-        if (!question) {
-          throw new Error(`Question not found for ID: ${answer.question_id}`)
+试卷ID: ${examId}
+学生ID: ${studentId}
+
+${questionsWithAnswers.map((q, index) => `
+问题 ${index + 1} (ID: ${q.id})：
+${q.question}
+
+标准答案：
+${q.standardAnswer}
+
+学生答案：
+${q.studentAnswer}
+
+满分：${q.maxScore}
+`).join('\n\n')}
+
+请为每个问题提供以下评分信息：
+1. 分数（不超过该题的满分）
+2. 评分点分析（列出关键评分点及得分情况）
+3. 评语和反馈
+4. 置信度（0-100%，表示你对这个评分的确信程度）
+
+以JSON格式返回，格式如下:
+{
+  "results": [
+    {
+      "questionId": "问题ID",
+      "score": 分数,
+      "confidence": 置信度,
+      "feedback": "详细评语",
+      "scoringPoints": [
+        {"point": "评分点描述", "status": "correct|partially|incorrect", "comment": "简短评论"}
+      ]
+    },
+    // 其他问题的评分...
+  ]
+}
+`
+
+    let text: string;
+    
+    // 根据是否提供了API密钥决定使用哪种方式调用API
+    if (apiKey) {
+      // 使用自定义OpenAI客户端
+      const openaiClient = getOpenAIClient(apiKey);
+      const completion = await openaiClient.chat.completions.create({
+        model,
+        messages: [
+          { role: "system", content: "你是一个专业的教育评分助手，可以精确评估学生答案。" },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.3,
+        max_tokens: 128000,
+      });
+      text = completion.choices[0]?.message?.content || '';
+    } else {
+      // 使用AI SDK
+      const { text: resultText } = await generateText({
+        model: openai(model),
+        prompt,
+        temperature: 0.3,
+        maxTokens: 128000,
+      });
+      text = resultText;
+    }
+
+    // 解析响应
+    try {
+      // 从响应中提取JSON（以防有额外文本）
+      const jsonMatch = text.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) {
+        throw new Error("无法从AI响应中提取JSON")
+      }
+
+      const jsonStr = jsonMatch[0]
+      let result;
+      
+      try {
+        result = JSON.parse(jsonStr);
+      } catch (parseError: any) {
+        console.error("第一次解析AI返回的JSON失败，尝试使用AI修复:", parseError);
+        
+        // 如果有提供API密钥，使用AI修复JSON
+        if (apiKey) {
+          const fixedJson = await fixJsonWithAI(jsonStr, parseError.message, apiKey, model);
+          result = JSON.parse(fixedJson);
+          console.log("使用AI修复后的JSON解析成功");
+        } else {
+          throw parseError; // 如果没有API密钥，则直接抛出解析错误
         }
+      }
 
-        try {
-          const result = await gradeAnswer(question.content, question.standard_answer, answer.content, question.score)
+      // 验证结果结构
+      if (!result.results || !Array.isArray(result.results)) {
+        throw new Error("AI响应缺少必要的字段")
+      }
 
-          return {
-            questionId: answer.question_id,
-            studentId: answer.student_id,
-            result,
+      // 处理每个问题的评分结果
+      return result.results.map((questionResult: any) => {
+        // 确保分数在范围内
+        const question = questions.find(q => q.id === questionResult.questionId);
+        const maxScore = question ? question.score : 100;
+        const score = Math.max(0, Math.min(maxScore, questionResult.score));
+        
+        // 确保置信度在范围内
+        const confidence = Math.max(0, Math.min(100, questionResult.confidence));
+
+        return {
+          questionId: questionResult.questionId,
+          result: {
+            score,
+            confidence,
+            feedback: questionResult.feedback,
+            scoringPoints: JSON.stringify(questionResult.scoringPoints),
           }
-        } catch (error) {
-          console.error(`Error grading answer for student ${answer.student_id}, question ${answer.question_id}:`, error)
+        };
+      });
 
-          // Return a fallback result
-          return {
-            questionId: answer.question_id,
-            studentId: answer.student_id,
+    } catch (parseError) {
+      console.error("解析AI响应时出错:", parseError)
+      console.error("原始响应:", text)
+
+      // 解析失败时的回退响应
+      return questions.map(q => ({
+        questionId: q.id,
+        result: {
+          score: 0,
+          confidence: 30,
+          feedback: "无法评估此答案。请手动审核。",
+          scoringPoints: JSON.stringify([
+            {
+              point: "AI评估错误",
+              status: "incorrect",
+              comment: "AI无法正确评估此答案。请手动审核。",
+            },
+          ]),
+        }
+      }));
+    }
+  } catch (error) {
+    console.error("评分试卷时出错:", error)
+    throw error
+  }
+}
+
+/**
+ * 批量评分整个考试的所有学生的试卷
+ *
+ * @param examId 考试ID
+ * @param questions 考试中的所有问题及其标准答案
+ * @param studentAnswers 所有学生的答案，按学生ID分组
+ * @param model OpenAI模型名称，默认为gpt-4o
+ * @param apiKey OpenAI API密钥，如果提供则使用自定义客户端
+ * @returns 评分结果数组
+ */
+export async function batchGradeExams(
+  examId: string,
+  questions: Array<{ id: string; content: string; standard_answer: string; score: number }>,
+  studentAnswers: Array<{ question_id: string; student_id: string; content: string }>,
+  model: string = "gpt-4o",
+  apiKey?: string,
+): Promise<Array<{ studentId: string; questionId: string; result: GradingResult }>> {
+  // 按学生ID将答案分组
+  const answersByStudent: Record<string, Array<{ question_id: string; content: string }>> = {};
+  
+  studentAnswers.forEach(answer => {
+    if (!answersByStudent[answer.student_id]) {
+      answersByStudent[answer.student_id] = [];
+    }
+    answersByStudent[answer.student_id].push({
+      question_id: answer.question_id,
+      content: answer.content
+    });
+  });
+
+  const results = [];
+
+  // 处理每个学生的试卷
+  const studentIds = Object.keys(answersByStudent);
+  const batchSize = 3; // 每批处理的学生数量
+  
+  for (let i = 0; i < studentIds.length; i += batchSize) {
+    const batchStudentIds = studentIds.slice(i, i + batchSize);
+    
+    // 并行处理每个学生的试卷
+    const batchResults = await Promise.all(
+      batchStudentIds.map(async (studentId) => {
+        try {
+          const studentResults = await gradeExam(
+            examId,
+            questions,
+            studentId,
+            answersByStudent[studentId],
+            model,
+            apiKey
+          );
+          
+          // 将学生ID添加到每个结果中
+          return studentResults.map(result => ({
+            studentId,
+            questionId: result.questionId,
+            result: result.result
+          }));
+        } catch (error) {
+          console.error(`评分学生 ${studentId} 的试卷时出错:`, error);
+          
+          // 返回回退结果
+          return questions.map(question => ({
+            studentId,
+            questionId: question.id,
             result: {
               score: 0,
               confidence: 0,
-              feedback: "Error occurred during grading. Please review manually.",
+              feedback: "评分过程中发生错误。请手动审核。",
               scoringPoints: JSON.stringify([
                 {
-                  point: "Error",
+                  point: "错误",
                   status: "incorrect",
-                  comment: "An error occurred during the grading process.",
+                  comment: "评分过程中发生错误。",
                 },
               ]),
-            },
-          }
+            }
+          }));
         }
-      }),
-    )
-
-    results.push(...batchResults)
-
-    // Add a small delay between batches to avoid rate limiting
-    if (i + batchSize < answers.length) {
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      })
+    );
+    
+    // 展平结果并添加到总结果中
+    results.push(...batchResults.flat());
+    
+    // 在批次之间添加小延迟，以避免速率限制
+    if (i + batchSize < studentIds.length) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
     }
   }
 
-  return results
+  return results;
 }
 
 /**
@@ -268,6 +623,8 @@ export async function batchGradeAnswers(
  * @param standardAnswer The standard/model answer
  * @param studentAnswers Array of student answers
  * @param scores Array of scores corresponding to the student answers
+ * @param model OpenAI模型名称，默认为gpt-4o
+ * @param apiKey OpenAI API密钥，如果提供则使用自定义客户端
  * @returns Analysis of the question quality
  */
 export async function analyzeQuestionQuality(
@@ -275,6 +632,8 @@ export async function analyzeQuestionQuality(
   standardAnswer: string,
   studentAnswers: string[],
   scores: number[],
+  model: string = "gpt-4o",
+  apiKey?: string,
 ): Promise<{
   difficulty: number
   discrimination: number
@@ -310,13 +669,32 @@ Return your analysis in the following JSON format:
 }
 `
 
-    // Use the AI SDK to generate the analysis
-    const { text } = await generateText({
-      model: openai("gpt-4o"),
-      prompt,
-      temperature: 0.3,
-      maxTokens: 1000,
-    })
+    let text: string;
+    
+    // 根据是否提供了API密钥决定使用哪种方式调用API
+    if (apiKey) {
+      // 使用自定义OpenAI客户端
+      const openaiClient = getOpenAIClient(apiKey);
+      const completion = await openaiClient.chat.completions.create({
+        model,
+        messages: [
+          { role: "system", content: "你是一个专业的教育评估专家，擅长分析考试题目的质量。" },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.3,
+        max_tokens: 128000,
+      });
+      text = completion.choices[0]?.message?.content || '';
+    } else {
+      // 使用AI SDK
+      const { text: resultText } = await generateText({
+        model: openai(model),
+        prompt,
+        temperature: 0.3,
+        maxTokens: 128000,
+      });
+      text = resultText;
+    }
 
     // Parse the response
     try {
@@ -326,7 +704,22 @@ Return your analysis in the following JSON format:
       }
 
       const jsonStr = jsonMatch[0]
-      const result = JSON.parse(jsonStr)
+      let result;
+      
+      try {
+        result = JSON.parse(jsonStr);
+      } catch (parseError: any) {
+        console.error("第一次解析AI返回的JSON失败，尝试使用AI修复:", parseError);
+        
+        // 如果有提供API密钥，使用AI修复JSON
+        if (apiKey) {
+          const fixedJson = await fixJsonWithAI(jsonStr, parseError.message, apiKey, model);
+          result = JSON.parse(fixedJson);
+          console.log("使用AI修复后的JSON解析成功");
+        } else {
+          throw parseError; // 如果没有API密钥，则直接抛出解析错误
+        }
+      }
 
       return {
         difficulty: Math.max(0, Math.min(100, result.difficulty)),
@@ -342,7 +735,7 @@ Return your analysis in the following JSON format:
         difficulty: 50,
         discrimination: 50,
         clarity: 50,
-        suggestions: "Unable to analyze this question. Please review manually.",
+        suggestions: "无法分析此问题。请手动审核。",
       }
     }
   } catch (error) {

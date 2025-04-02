@@ -20,6 +20,8 @@ import dynamic from "next/dynamic"
 // 导入环境检查相关组件
 import { EnvProvider, ClientOnly, PdfFeature } from "@/components/env-checker"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Progress } from "@/components/ui/progress"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 // 动态导入PDF和DOCX预览组件，确保它们仅在客户端渲染
 const PDFViewer = dynamic(() => import("@/components/pdf-viewer"), {
@@ -31,6 +33,34 @@ const DocxViewer = dynamic(() => import("@/components/docx-viewer"), {
   ssr: false,
   loading: () => <Skeleton className="w-full h-[400px]" />
 })
+
+interface Question {
+  id: string;
+  content: string;
+  type: 'objective' | 'subjective' | 'calculation' | 'essay';
+  answer: string;
+  score: number;
+  options?: string[];
+}
+
+interface ExamData {
+  name: string;
+  subject_id: string;
+  description?: string;
+  grade?: string;
+  class?: string;
+  total_score?: number | null;
+  exam_date?: string;
+  created_by: string;
+  status?: string;
+}
+
+interface SubmitData {
+  examData: ExamData;
+  questions: Question[];
+  examFile: File | null;
+  examImages: File[] | null;
+}
 
 export default function NewExamPage() {
   const [activeTab, setActiveTab] = useState("basic")
@@ -52,10 +82,14 @@ export default function NewExamPage() {
     class: "",
     total_score: 100,
     exam_date: new Date().toISOString().split("T")[0],
+    status: "draft",
   })
 
   const { toast } = useToast()
   const router = useRouter()
+
+  const [parseProgress, setParseProgress] = useState(0);
+  const [showProgressDialog, setShowProgressDialog] = useState(false);
 
   // 检查API Key是否已设置
   useEffect(() => {
@@ -171,9 +205,26 @@ export default function NewExamPage() {
       // 开始解析
       setIsParsingFile(true);
       setParseError(null);
+      setParseProgress(0);
+      setShowProgressDialog(true);
+      
+      // 启动模拟进度
+      const totalDuration = 360; // 总时长360秒
+      const interval = 500; // 每500毫秒更新一次
+      const steps = totalDuration * 1000 / interval;
+      const increment = 100 / steps;
+      
+      const progressTimer = setInterval(() => {
+        setParseProgress(prev => {
+          const newProgress = prev + increment;
+          return newProgress < 99 ? newProgress : 99;
+        });
+      }, interval);
       
       const apiKey = localStorage.getItem("openai_api_key");
       if (!apiKey) {
+        clearInterval(progressTimer);
+        setShowProgressDialog(false);
         throw new Error("未设置API Key，请先在设置中配置OpenAI API Key");
       }
       
@@ -202,6 +253,8 @@ export default function NewExamPage() {
           const result = await response.json();
           
           if (!response.ok || !result.success) {
+            clearInterval(progressTimer);
+            setShowProgressDialog(false);
             throw new Error(result.error || '试卷解析失败');
           }
           
@@ -212,6 +265,8 @@ export default function NewExamPage() {
             total_score: result.totalScore
           }));
         } else {
+          clearInterval(progressTimer);
+          setShowProgressDialog(false);
           throw new Error(`不支持的文件格式: ${fileType || '未知'}`);
         }
       } else if (examImages.length > 0) {
@@ -235,6 +290,8 @@ export default function NewExamPage() {
         const result = await response.json();
         
         if (!response.ok || !result.success) {
+          clearInterval(progressTimer);
+          setShowProgressDialog(false);
           throw new Error(result.error || '试卷图片解析失败');
         }
         
@@ -246,6 +303,15 @@ export default function NewExamPage() {
         }));
       }
       
+      // 解析成功，将进度设置为100%
+      setParseProgress(100);
+      
+      // 稍微延迟关闭进度对话框，让用户看到100%进度
+      setTimeout(() => {
+        clearInterval(progressTimer);
+        setShowProgressDialog(false);
+      }, 500);
+      
       toast({
         title: "试卷解析成功",
         description: `成功解析出${questions.length}道题目`,
@@ -256,6 +322,7 @@ export default function NewExamPage() {
     } catch (error: any) {
       console.error("试卷解析错误:", error);
       setParseError(error.message || '试卷解析失败');
+      setShowProgressDialog(false);
       toast({
         title: "试卷解析失败",
         description: error.message || '无法解析试卷',
@@ -271,7 +338,7 @@ export default function NewExamPage() {
   }
   
   const handleSubmit = async () => {
-    if (!formData.name || !formData.subject_id || !formData.grade) {
+    if (!formData.name || !formData.subject_id) {
       toast({
         title: "表单不完整",
         description: "请填写所有必填字段",
@@ -292,95 +359,45 @@ export default function NewExamPage() {
         throw new Error("未登录")
       }
 
-      // 创建考试
-      const { data, error } = await supabase
-        .from("exams")
-        .insert({
-          name: formData.name,
-          subject_id: formData.subject_id,
-          description: formData.description,
-          grade: formData.grade,
-          class: formData.class || null,
-          total_score: formData.total_score,
-          exam_date: formData.exam_date,
+      // 准备提交数据
+      const submitData = {
+        examData: {
+          ...formData,
           created_by: user.id,
-          status: "draft",
-        })
-        .select()
+          total_score: formData.total_score ? parseFloat(String(formData.total_score)) : null
+        },
+        questions: questions.map(q => ({
+          ...q,
+          type: mapQuestionType(q.type)
+        }))
+      }
 
-      if (error) throw error
+      // 创建 FormData 对象
+      const formDataToSubmit = new FormData()
+      formDataToSubmit.append('examData', JSON.stringify(submitData.examData))
+      formDataToSubmit.append('questions', JSON.stringify(submitData.questions))
       
-      if (data && data[0]) {
-        const examId = data[0].id
-        
-        // 上传试卷文件或图片
-        if (examFile) {
-          const examFilePath = `exams/${examId}/exam_file_${examFile.name}`
-          const { error: uploadError } = await supabase.storage
-            .from('exam_files')
-            .upload(examFilePath, examFile)
-            
-          if (uploadError) {
-            console.error("试卷文件上传失败:", uploadError)
-            toast({
-              title: "试卷文件上传失败",
-              description: uploadError.message,
-              variant: "destructive",
-            })
-          }
-        }
-        
-        // 上传多张试卷图片
-        if (examImages.length > 0) {
-          for (let i = 0; i < examImages.length; i++) {
-            const image = examImages[i];
-            const imagePath = `exams/${examId}/exam_image_${i+1}_${image.name}`;
-            
-            const { error: uploadError } = await supabase.storage
-              .from('exam_files')
-              .upload(imagePath, image);
-              
-            if (uploadError) {
-              console.error(`试卷图片 ${i+1} 上传失败:`, uploadError);
-              toast({
-                title: `试卷图片 ${i+1} 上传失败`,
-                description: uploadError.message,
-                variant: "destructive",
-              });
-            }
-          }
-        }
-        
-        // 保存解析出的题目
-        if (questions.length > 0) {
-          try {
-            // 准备题目数据，确保格式正确
-            const formattedQuestions = questions.map(q => ({
-              exam_id: examId,
-              question_number: q.id,
-              content: q.content,
-              type: q.type,
-              options: q.options ? JSON.stringify(q.options) : null,
-              answer: q.answer,
-              score: q.score
-            }));
-            
-            const { error: questionsError } = await supabase
-              .from('questions')
-              .insert(formattedQuestions);
-              
-            if (questionsError) {
-              console.error("题目保存失败:", questionsError);
-              toast({
-                title: "题目保存失败",
-                description: questionsError.message,
-                variant: "destructive",
-              });
-            }
-          } catch (questionsErr) {
-            console.error("题目保存过程中出错:", questionsErr);
-          }
-        }
+      // 添加文件
+      if (examFile) {
+        formDataToSubmit.append('examFile', examFile)
+      }
+      
+      if (examImages && examImages.length > 0) {
+        examImages.forEach((image) => {
+          formDataToSubmit.append('examImages', image)
+        })
+      }
+
+      // 调用新的 API 路由
+      const response = await fetch('/api/exams/create', {
+        method: 'POST',
+        body: formDataToSubmit
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || '创建考试失败')
       }
 
       toast({
@@ -400,6 +417,40 @@ export default function NewExamPage() {
       })
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  // 添加类型映射函数
+  const mapQuestionType = (type: string): string => {
+    const typeMap: Record<string, string> = {
+      'choice': 'objective',        // 单选题
+      'multiChoice': 'objective',   // 多选题
+      'fill': 'subjective',         // 填空题
+      'shortAnswer': 'subjective',  // 简答题
+      'essay': 'essay'              // 论述题
+    }
+    
+    const mappedType = typeMap[type] || 'objective'
+    if (!typeMap[type]) {
+      console.warn(`未知的题目类型: ${type}，将使用默认类型: objective`)
+    }
+    
+    return mappedType
+  }
+
+  // 在组件中添加题目类型映射函数
+  const getQuestionTypeDisplay = (type: string) => {
+    switch (type) {
+      case 'objective':
+        return '客观题';
+      case 'subjective':
+        return '主观题';
+      case 'calculation':
+        return '计算题';
+      case 'essay':
+        return '论述题';
+      default:
+        return '未知类型';
     }
   }
 
@@ -738,12 +789,9 @@ export default function NewExamPage() {
                             ({question.score} 分)
                           </span>
                         </h4>
-                        <span className="text-sm px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded">
-                          {question.type === 'choice' ? '单选题' : 
-                           question.type === 'multiChoice' ? '多选题' : 
-                           question.type === 'fill' ? '填空题' : 
-                           question.type === 'shortAnswer' ? '简答题' : '论述题'}
-                        </span>
+                        <div className="text-sm text-muted-foreground">
+                          {getQuestionTypeDisplay(question.type)}
+                        </div>
                       </div>
                       
                       <div className="pt-1">
@@ -766,7 +814,13 @@ export default function NewExamPage() {
                       
                       <div className="pt-2 border-t">
                         <h5 className="text-sm font-medium text-green-600 dark:text-green-400">标准答案:</h5>
-                        <p className="whitespace-pre-wrap mt-1">{question.answer}</p>
+                        <p className="whitespace-pre-wrap mt-1">
+                          {question.answer ? question.answer : (
+                            <span className="text-yellow-600 dark:text-yellow-400">
+                              无标准答案，请手动添加
+                            </span>
+                          )}
+                        </p>
                       </div>
                     </div>
                   ))}
@@ -822,6 +876,30 @@ export default function NewExamPage() {
           </Card>
         </TabsContent>
       </Tabs>
+      
+      {/* 解析进度对话框 */}
+      {showProgressDialog && (
+        <Dialog open={showProgressDialog} onOpenChange={setShowProgressDialog}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>正在解析试卷</DialogTitle>
+              <DialogDescription>
+                系统正在分析试卷内容，请耐心等待...
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-6">
+              <div className="flex justify-between mb-1">
+                <span className="text-sm font-medium">解析进度</span>
+                <span className="text-sm text-muted-foreground">{Math.round(parseProgress)}%</span>
+              </div>
+              <Progress value={parseProgress} className="h-2" />
+              <p className="mt-2 text-sm text-muted-foreground">
+                {parseProgress < 100 ? "正在分析试卷中的题目和答案..." : "解析完成！"}
+              </p>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   )
 }

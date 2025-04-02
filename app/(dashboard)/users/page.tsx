@@ -226,6 +226,12 @@ ALTER TABLE public.active_graders ENABLE ROW LEVEL SECURITY;
 -- 创建基本的行级安全策略
 CREATE POLICY "允许所有用户查看科目" ON public.subjects FOR SELECT USING (true);
 
+-- 创建考试表的行级安全策略
+CREATE POLICY "允许所有用户查看考试" ON public.exams FOR SELECT USING (true);
+CREATE POLICY "允许教师创建考试" ON public.exams FOR INSERT WITH CHECK (auth.role() = 'teacher');
+CREATE POLICY "允许教师更新自己的考试" ON public.exams FOR UPDATE USING (auth.uid() = created_by);
+CREATE POLICY "允许教师删除自己的考试" ON public.exams FOR DELETE USING (auth.uid() = created_by);
+
 -- 注意：要启用 Realtime 功能，请在 Supabase 控制台中手动配置
 -- 1. 转到 Database > Replication
 -- 2. 在 "Realtime" 部分，添加您想要实时监控的表

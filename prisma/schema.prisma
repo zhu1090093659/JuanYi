@@ -7,7 +7,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = "postgresql://postgres.jeqzkbilkrxmkbudpkxy:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImplcXprYmlsa3J4bWtidWRwa3h5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MzQwNDQwNSwiZXhwIjoyMDU4OTgwNDA1fQ.zEjNAK446XlYvqn-0461jalW8ljPkJlPc5QPoREpk8c@db.jeqzkbilkrxmkbudpkxy.supabase.co:5432/postgres"
+  url      = env("DATABASE_URL")
 }
 
 // 用户表
@@ -17,6 +17,7 @@ model User {
   name       String
   role       String
   school     String?
+  class      String?
   created_at DateTime          @default(now())
   updated_at DateTime          @updatedAt
   grades     Grade[]
@@ -31,7 +32,6 @@ model Subject {
   id         String    @id @default(uuid())
   name       String
   created_at DateTime  @default(now())
-  updated_at DateTime  @updatedAt
   exams      Exam[]
 
   @@map("subjects")
@@ -43,11 +43,12 @@ model Exam {
   name        String
   description String?
   subject_id  String
-  grade       String?
-  total_score Float?
-  exam_date   DateTime?
-  status      String
-  created_by  String?
+  grade       String
+  class       String?
+  total_score Float
+  exam_date   DateTime
+  status      String     @default("draft")
+  created_by  String
   created_at  DateTime   @default(now())
   updated_at  DateTime   @updatedAt
   graded_at   DateTime?
@@ -67,11 +68,11 @@ model Question {
   number           Int
   content          String
   type             String
-  standard_answer  String?
+  standard_answer  String
   score            Float
   created_at       DateTime @default(now())
   updated_at       DateTime @updatedAt
-  exams            Exam     @relation(fields: [exam_id], references: [id])
+  exams            Exam     @relation(fields: [exam_id], references: [id], onDelete: Cascade)
   grades           Grade[]
   answers          Answer[]
 
@@ -88,13 +89,13 @@ model Grade {
   ai_score      Float?
   ai_confidence Float?
   feedback      String?
-  scoring_points Int[]
-  graded_by     String?
-  graded_at     DateTime?
+  scoring_points Json?
+  graded_by     String
+  graded_at     DateTime
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
-  exams         Exam     @relation(fields: [exam_id], references: [id])
-  questions     Question @relation(fields: [question_id], references: [id])
+  exams         Exam     @relation(fields: [exam_id], references: [id], onDelete: Cascade)
+  questions     Question @relation(fields: [question_id], references: [id], onDelete: Cascade)
   students      User     @relation(fields: [student_id], references: [id])
 
   @@map("grades")
@@ -109,7 +110,7 @@ model Answer {
   content      String
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
-  questions    Question @relation(fields: [question_id], references: [id])
+  questions    Question @relation(fields: [question_id], references: [id], onDelete: Cascade)
 
   @@map("answers")
 }
@@ -120,12 +121,12 @@ model Report {
   student_id  String
   exam_id     String
   content     String
-  strengths   String?
-  weaknesses  String?
+  strengths   String[]
+  weaknesses  String[]
   created_at  DateTime @default(now())
   updated_at  DateTime @updatedAt
   students    User     @relation(fields: [student_id], references: [id])
-  exams       Exam     @relation(fields: [exam_id], references: [id])
+  exams       Exam     @relation(fields: [exam_id], references: [id], onDelete: Cascade)
 
   @@map("reports")
 }
@@ -137,24 +138,11 @@ model Collaboration {
   user_id      String
   role         String
   created_at   DateTime @default(now())
-  exams        Exam     @relation(fields: [exam_id], references: [id])
+  exams        Exam     @relation(fields: [exam_id], references: [id], onDelete: Cascade)
   users        User     @relation(fields: [user_id], references: [id])
 
   @@map("collaborations")
 }
-
-// 学生考试结果视图
-// StudentExamResults是一个视图，将通过SQL创建，而非通过Prisma创建
-// CREATE VIEW "student_exam_results" AS
-// SELECT 
-//   uuid_generate_v4() as id,
-//   g.student_id,
-//   g.exam_id,
-//   g.score,
-//   e.total_score,
-//   g.created_at
-// FROM grades g
-// JOIN exams e ON g.exam_id = e.id;
 
 // 活动评分员表
 model ActiveGrader {
