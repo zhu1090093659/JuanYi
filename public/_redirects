@@ -1,0 +1,12 @@
+/* /.next/server/pages/:path* 200
+/* /.next/server/chunks/:path* 200
+/* /_next/* 200
+/* /api/:path* 200
+/* /static/* 200
+/* /assets/* 200
+/* /images/* 200
+/* /_app/* 200
+/* /_document/* 200
+/* /index.html 200
+/* /:path*/ 200
+/* /* 200 

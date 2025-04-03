@@ -44,8 +44,6 @@ const nextConfig = {
     // 这是一个临时解决方案，应该在 Next.js 修复这个问题后移除
     ignoreBuildErrors: true,
   },
-  // 为Cloudflare Pages配置输出
-  output: 'standalone',
 };
 
 module.exports = nextConfig;
