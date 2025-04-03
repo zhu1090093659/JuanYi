@@ -1,0 +1,22 @@
+{
+  "name": "ai-grading-platform",
+  "compatibility_date": "2025-04-03",
+  "main": ".next/server/app/index.js",
+  "assets": {
+    "directory": ".next/static"
+  },
+  "build": {
+    "command": "npm run build",
+    "cwd": "."
+  },
+  "routes": [
+    { "pattern": "/*", "script": "worker.js" }
+  ],
+  "env": {
+    "NEXT_PUBLIC_SUPABASE_URL": "${NEXT_PUBLIC_SUPABASE_URL}",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "${NEXT_PUBLIC_SUPABASE_ANON_KEY}",
+    "NEXT_PUBLIC_SITE_URL": "${NEXT_PUBLIC_SITE_URL}",
+    "NEXTAUTH_URL": "${NEXTAUTH_URL}",
+    "NEXTAUTH_SECRET": "${NEXTAUTH_SECRET}"
+  }
+} 
