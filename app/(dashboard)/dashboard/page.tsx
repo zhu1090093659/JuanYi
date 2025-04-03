@@ -91,8 +91,17 @@ export default function DashboardPage() {
     try {
       setLoading(true);
       
+      // 检查用户ID是否存在
+      if (!user?.id) {
+        console.log("User ID is undefined, skipping dashboard data fetch");
+        setLoading(false);
+        return;
+      }
+      
+      console.log("Fetching dashboard data for student ID:", user.id);
+      
       // 使用API路由获取学生仪表盘数据
-      const response = await fetch(`/api/dashboard/student-data?studentId=${user?.id}`);
+      const response = await fetch(`/api/dashboard/student-data?studentId=${user.id}`);
       
       if (!response.ok) {
         throw new Error(`Error fetching student dashboard data: ${response.statusText}`);
@@ -114,6 +123,15 @@ export default function DashboardPage() {
       });
     } catch (error) {
       console.error("Error fetching student dashboard data:", error);
+      // 设置默认数据，确保UI可以正常渲染
+      setStudentDashboardData({
+        totalExams: 0,
+        completedExams: 0,
+        averageScore: 0,
+        highestScore: 0,
+        recentExams: [],
+        subjectPerformance: []
+      });
     } finally {
       setLoading(false);
     }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import {
@@ -38,6 +38,57 @@ export default function UploadExamPage() {
     description: "",
     notes: ""
   })
+  
+  // 在组件加载时获取科目列表
+  useEffect(() => {
+    const fetchSubjects = async () => {
+      try {
+        // 设置默认科目列表，确保始终有可用数据
+        const defaultSubjects = [
+          { id: "math", name: "数学" },
+          { id: "physics", name: "物理" },
+          { id: "chemistry", name: "化学" },
+          { id: "biology", name: "生物" },
+          { id: "chinese", name: "语文" },
+          { id: "english", name: "英语" }
+        ];
+        
+        // 尝试从API获取科目列表，失败则使用默认列表
+        try {
+          // 即使用户未登录仍尝试获取科目列表，但不显示错误
+          if (!user?.id) {
+            console.log("用户未登录，使用默认科目列表")
+            setSubjects(defaultSubjects)
+            return
+          }
+          
+          const response = await fetch("/api/subjects")
+          if (!response.ok) {
+            throw new Error("获取科目列表失败")
+          }
+          
+          const data = await response.json()
+          if (data.subjects && Array.isArray(data.subjects) && data.subjects.length > 0) {
+            console.log("成功获取科目列表:", data.subjects.length)
+            setSubjects(data.subjects)
+          } else {
+            console.log("未获取到科目数据，使用默认列表")
+            setSubjects(defaultSubjects)
+          }
+        } catch (error: any) {
+          console.error("获取科目列表错误:", error)
+          // 使用默认科目列表，确保页面可用
+          setSubjects(defaultSubjects)
+        }
+      } catch (outerError) {
+        console.error("科目处理外部错误:", outerError)
+        // 确保至少有一个默认选项
+        setSubjects([{ id: "default", name: "默认科目" }])
+      }
+    }
+    
+    fetchSubjects()
+  }, [user])
 
   const handleChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
@@ -57,6 +108,11 @@ export default function UploadExamPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    if (!user?.id) {
+      setError("请先登录后再试")
+      return
+    }
     
     if (!examFile || !answerFile) {
       setError("请上传试卷和答案文件")
@@ -80,12 +136,14 @@ export default function UploadExamPage() {
       // 添加试卷基本信息
       const examData = {
         ...formData,
-        student_id: user?.id,
+        student_id: user.id,
         status: "submitted", // 初始状态为"已提交"
         created_at: new Date().toISOString()
       }
       
       uploadData.append("examData", JSON.stringify(examData))
+      
+      console.log("准备上传试卷:", formData.name, "科目ID:", formData.subject_id)
       
       // 上传到服务器
       const response = await fetch("/api/student/upload-exam", {
@@ -155,12 +213,17 @@ export default function UploadExamPage() {
                     <SelectValue placeholder="选择科目" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="math">数学</SelectItem>
-                    <SelectItem value="physics">物理</SelectItem>
-                    <SelectItem value="chemistry">化学</SelectItem>
-                    <SelectItem value="biology">生物</SelectItem>
-                    <SelectItem value="chinese">语文</SelectItem>
-                    <SelectItem value="english">英语</SelectItem>
+                    {subjects.length > 0 ? (
+                      subjects.map((subject) => (
+                        <SelectItem key={subject.id} value={subject.id}>
+                          {subject.name}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="default" disabled>
+                        加载科目中...
+                      </SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -215,7 +278,7 @@ export default function UploadExamPage() {
             </div>
           </CardContent>
           <CardFooter className="flex justify-between">
-            <Button variant="outline" onClick={() => router.back()}>
+            <Button variant="outline" onClick={() => router.push("/exams")}>
               取消
             </Button>
             <Button type="submit" disabled={isUploading}>
