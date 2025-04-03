@@ -11,6 +11,7 @@ import { QuestionDifficultyChart } from "@/components/charts/question-difficulty
 import { StudentProgressChart } from "@/components/charts/student-progress-chart"
 import { Skeleton } from "@/components/ui/skeleton"
 import { supabase } from "@/lib/supabase/client"
+import { useAuth } from "@/components/auth/auth-provider"
 
 function ChartSkeleton() {
   return (
@@ -21,6 +22,9 @@ function ChartSkeleton() {
 }
 
 export default function AnalyticsPage() {
+  const { user } = useAuth()
+  const userRole = user?.role || "student"
+  
   const [selectedExam, setSelectedExam] = useState("all");
   const [selectedClass, setSelectedClass] = useState("all");
   const [loading, setLoading] = useState(true);
@@ -43,15 +47,41 @@ export default function AnalyticsPage() {
       stdDeviation: 0
     }
   });
+  
+  // 学生个人数据分析状态
+  const [studentAnalyticsData, setStudentAnalyticsData] = useState({
+    personalProgress: [] as Array<{examName: string, date: string, score: number, classAvg: number}>,
+    subjectPerformance: [] as Array<{subject: string, score: number, classAvg: number}>,
+    strengthsWeaknesses: {
+      strengths: [] as Array<string>,
+      weaknesses: [] as Array<string>
+    },
+    recentExams: [] as Array<{
+      id: string, 
+      name: string, 
+      date: string, 
+      score: number, 
+      totalScore: number,
+      ranking: number,
+      totalStudents: number
+    }>
+  });
 
   useEffect(() => {
     // 获取考试列表
     async function fetchExams() {
       try {
-        const { data, error } = await supabase
+        let query = supabase
           .from("exams")
           .select("id, name")
           .order("created_at", { ascending: false });
+          
+        // 学生只能看到自己参与的考试
+        if (userRole === "student" && user?.id) {
+          query = query.eq("student_id", user.id);
+        }
+        
+        const { data, error } = await query;
           
         if (error) {
           console.error("Error fetching exams:", error);
@@ -64,10 +94,19 @@ export default function AnalyticsPage() {
       }
     }
     
-    // 获取班级列表
+    // 获取班级列表 - 只有教师和管理员可以查看多个班级
     async function fetchClasses() {
       try {
-        // 使用users表中的school字段替代classes表
+        // 学生只能看到自己所在的班级
+        if (userRole === "student") {
+          if (user?.class) {
+            setClasses([{ id: user.class, name: user.class }]);
+            setSelectedClass(user.class);
+          }
+          return;
+        }
+        
+        // 教师和管理员可以看到所有班级
         const { data, error } = await supabase
           .from("users")
           .select("school")
@@ -94,9 +133,10 @@ export default function AnalyticsPage() {
     
     fetchExams();
     fetchClasses();
-  }, []);
+  }, [user, userRole]);
 
   useEffect(() => {
+    // 教师/管理员获取分析数据
     async function fetchAnalyticsData() {
       try {
         setLoading(true);
@@ -149,10 +189,58 @@ export default function AnalyticsPage() {
       }
     }
     
-    fetchAnalyticsData();
-  }, [selectedExam, selectedClass]);
+    // 学生获取个人分析数据
+    async function fetchStudentAnalyticsData() {
+      try {
+        setLoading(true);
+        
+        // 真实项目中应该从API获取学生个人数据
+        // 这里使用模拟数据代替
+        
+        const mockStudentData = {
+          personalProgress: [
+            {examName: "期中数学考试", date: "2023-10-15", score: 92, classAvg: 78},
+            {examName: "英语单元测试", date: "2023-09-20", score: 88, classAvg: 80},
+            {examName: "物理期末考试", date: "2023-06-30", score: 95, classAvg: 82},
+            {examName: "化学实验报告", date: "2023-05-15", score: 90, classAvg: 75},
+            {examName: "语文作文评测", date: "2023-04-10", score: 85, classAvg: 82},
+          ],
+          subjectPerformance: [
+            {subject: "数学", score: 92, classAvg: 78},
+            {subject: "英语", score: 88, classAvg: 80},
+            {subject: "物理", score: 95, classAvg: 82},
+            {subject: "化学", score: 90, classAvg: 75},
+            {subject: "语文", score: 85, classAvg: 82},
+          ],
+          strengthsWeaknesses: {
+            strengths: ["数学计算能力", "物理实验分析", "英语听力理解"],
+            weaknesses: ["语文写作", "化学方程式记忆"]
+          },
+          recentExams: [
+            {id: "exam1", name: "期中数学考试", date: "2023-10-15", score: 92, totalScore: 100, ranking: 3, totalStudents: 45},
+            {id: "exam2", name: "英语单元测试", date: "2023-09-20", score: 88, totalScore: 100, ranking: 5, totalStudents: 45},
+            {id: "exam3", name: "物理期末考试", date: "2023-06-30", score: 95, totalScore: 100, ranking: 1, totalStudents: 45},
+          ]
+        };
+        
+        setStudentAnalyticsData(mockStudentData);
+      } catch (error) {
+        console.error("Error fetching student analytics data:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    // 根据用户角色获取不同的分析数据
+    if (userRole === "student") {
+      fetchStudentAnalyticsData();
+    } else {
+      fetchAnalyticsData();
+    }
+  }, [selectedExam, selectedClass, userRole, user?.id]);
 
-  return (
+  // 教师/管理员视图
+  const renderTeacherAnalytics = () => (
     <div className="flex-1 space-y-4 p-8 pt-6">
       <div className="flex items-center justify-between space-y-2">
         <h2 className="text-3xl font-bold tracking-tight">数据分析</h2>
@@ -398,5 +486,229 @@ export default function AnalyticsPage() {
         </TabsContent>
       </Tabs>
     </div>
-  )
+  );
+  
+  // 学生视图
+  const renderStudentAnalytics = () => (
+    <div className="flex-1 space-y-4 p-8 pt-6">
+      <div className="flex items-center justify-between space-y-2">
+        <h2 className="text-3xl font-bold tracking-tight">我的学习分析</h2>
+        <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2">
+            <Label htmlFor="exam-select">考试:</Label>
+            <Select value={selectedExam} onValueChange={setSelectedExam}>
+              <SelectTrigger id="exam-select" className="w-[180px]">
+                <SelectValue placeholder="选择考试" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部考试</SelectItem>
+                {exams.map(exam => (
+                  <SelectItem key={exam.id} value={exam.id}>{exam.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
+      <Tabs defaultValue="progress" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="progress">学习进度</TabsTrigger>
+          <TabsTrigger value="performance">学科表现</TabsTrigger>
+          <TabsTrigger value="feedback">学习反馈</TabsTrigger>
+        </TabsList>
+        <TabsContent value="progress" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <Card className="col-span-2">
+              <CardHeader>
+                <CardTitle>个人进步趋势</CardTitle>
+                <CardDescription>查看您在各次考试中的表现趋势</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <ChartSkeleton />
+                ) : (
+                  <div className="h-[300px]">
+                    <StudentProgressChart data={studentAnalyticsData.personalProgress} />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            
+            <Card className="col-span-2">
+              <CardHeader>
+                <CardTitle>最近考试表现</CardTitle>
+                <CardDescription>查看您最近的考试结果和排名</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="space-y-4">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {studentAnalyticsData.recentExams.map((exam) => (
+                      <div key={exam.id} className="flex flex-col space-y-2 pb-4 border-b last:border-0">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p className="font-medium">{exam.name}</p>
+                            <p className="text-sm text-muted-foreground">{exam.date}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-medium">{exam.score}/{exam.totalScore}</p>
+                            <p className="text-sm text-muted-foreground">排名: {exam.ranking}/{exam.totalStudents}</p>
+                          </div>
+                        </div>
+                        <div className="w-full bg-secondary rounded-full h-2.5">
+                          <div 
+                            className="bg-primary h-2.5 rounded-full" 
+                            style={{ width: `${(exam.score / exam.totalScore) * 100}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+        
+        <TabsContent value="performance" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>学科表现分析</CardTitle>
+                <CardDescription>各科目的表现对比</CardDescription>
+              </CardHeader>
+              <CardContent className="px-2">
+                {loading ? (
+                  <ChartSkeleton />
+                ) : (
+                  <div className="h-[300px]">
+                    {/* 这里应该是学科表现图表 */}
+                    {/* 实际项目中应该使用实际的图表组件 */}
+                    <ClassComparisonChart data={studentAnalyticsData.subjectPerformance.map(item => ({
+                      class: item.subject,
+                      avgScore: item.score,
+                      maxScore: item.score + 5,
+                      minScore: item.score - 5
+                    }))} />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader>
+                <CardTitle>与班级平均分对比</CardTitle>
+                <CardDescription>您的成绩与班级平均分的差距</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="space-y-4">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                ) : (
+                  <div className="space-y-6 mt-2">
+                    {studentAnalyticsData.subjectPerformance.map((subject, index) => (
+                      <div key={index} className="space-y-2">
+                        <div className="flex justify-between">
+                          <span className="font-medium">{subject.subject}</span>
+                          <span className={subject.score >= subject.classAvg ? "text-green-500" : "text-red-500"}>
+                            {subject.score >= subject.classAvg ? `+${(subject.score - subject.classAvg).toFixed(1)}` : (subject.score - subject.classAvg).toFixed(1)}
+                          </span>
+                        </div>
+                        <div className="flex items-center space-x-2 text-sm">
+                          <span className="w-16 text-muted-foreground">班级均分</span>
+                          <div className="flex-1">
+                            <div className="w-full bg-secondary rounded-full h-2">
+                              <div 
+                                className="bg-muted-foreground h-2 rounded-full" 
+                                style={{ width: `${(subject.classAvg / 100) * 100}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                          <span className="w-10 text-right">{subject.classAvg}</span>
+                        </div>
+                        <div className="flex items-center space-x-2 text-sm">
+                          <span className="w-16 text-muted-foreground">我的分数</span>
+                          <div className="flex-1">
+                            <div className="w-full bg-secondary rounded-full h-2">
+                              <div 
+                                className="bg-primary h-2 rounded-full" 
+                                style={{ width: `${(subject.score / 100) * 100}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                          <span className="w-10 text-right">{subject.score}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+        
+        <TabsContent value="feedback" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>学习优势</CardTitle>
+                <CardDescription>您表现较好的学习领域</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="space-y-4">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {studentAnalyticsData.strengthsWeaknesses.strengths.map((strength, index) => (
+                      <div key={index} className="flex items-start space-x-2">
+                        <div className="mt-0.5 text-green-500">✓</div>
+                        <p>{strength}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader>
+                <CardTitle>待提升领域</CardTitle>
+                <CardDescription>需要加强的学习领域</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="space-y-4">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {studentAnalyticsData.strengthsWeaknesses.weaknesses.map((weakness, index) => (
+                      <div key={index} className="flex items-start space-x-2">
+                        <div className="mt-0.5 text-amber-500">!</div>
+                        <p>{weakness}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+
+  return userRole === "student" ? renderStudentAnalytics() : renderTeacherAnalytics();
 }
