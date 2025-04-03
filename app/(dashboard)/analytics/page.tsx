@@ -194,36 +194,28 @@ export default function AnalyticsPage() {
       try {
         setLoading(true);
         
-        // 真实项目中应该从API获取学生个人数据
-        // 这里使用模拟数据代替
+        // 从API获取学生个人数据
+        const response = await fetch(`/api/analytics/student-data?studentId=${user?.id}`);
         
-        const mockStudentData = {
-          personalProgress: [
-            {examName: "期中数学考试", date: "2023-10-15", score: 92, classAvg: 78},
-            {examName: "英语单元测试", date: "2023-09-20", score: 88, classAvg: 80},
-            {examName: "物理期末考试", date: "2023-06-30", score: 95, classAvg: 82},
-            {examName: "化学实验报告", date: "2023-05-15", score: 90, classAvg: 75},
-            {examName: "语文作文评测", date: "2023-04-10", score: 85, classAvg: 82},
-          ],
-          subjectPerformance: [
-            {subject: "数学", score: 92, classAvg: 78},
-            {subject: "英语", score: 88, classAvg: 80},
-            {subject: "物理", score: 95, classAvg: 82},
-            {subject: "化学", score: 90, classAvg: 75},
-            {subject: "语文", score: 85, classAvg: 82},
-          ],
+        if (!response.ok) {
+          throw new Error(`Error fetching student analytics data: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        
+        if (result.error) {
+          throw new Error(`Error fetching student analytics data: ${result.error}`);
+        }
+        
+        setStudentAnalyticsData(result.data || {
+          personalProgress: [],
+          subjectPerformance: [],
           strengthsWeaknesses: {
-            strengths: ["数学计算能力", "物理实验分析", "英语听力理解"],
-            weaknesses: ["语文写作", "化学方程式记忆"]
+            strengths: [],
+            weaknesses: []
           },
-          recentExams: [
-            {id: "exam1", name: "期中数学考试", date: "2023-10-15", score: 92, totalScore: 100, ranking: 3, totalStudents: 45},
-            {id: "exam2", name: "英语单元测试", date: "2023-09-20", score: 88, totalScore: 100, ranking: 5, totalStudents: 45},
-            {id: "exam3", name: "物理期末考试", date: "2023-06-30", score: 95, totalScore: 100, ranking: 1, totalStudents: 45},
-          ]
-        };
-        
-        setStudentAnalyticsData(mockStudentData);
+          recentExams: []
+        });
       } catch (error) {
         console.error("Error fetching student analytics data:", error);
       } finally {

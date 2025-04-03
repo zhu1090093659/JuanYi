@@ -91,61 +91,27 @@ export default function DashboardPage() {
     try {
       setLoading(true);
       
-      // 示例数据 - 实际中应该从API获取
-      // 以下是模拟数据
-      const mockData = {
-        totalExams: 12,
-        completedExams: 10,
-        averageScore: 85.5,
-        highestScore: 98,
-        recentExams: [
-          {
-            id: "exam-1",
-            name: "期中数学考试",
-            exam_date: "2023-11-15",
-            score: 92,
-            total_score: 100
-          },
-          {
-            id: "exam-2",
-            name: "英语单元测试",
-            exam_date: "2023-11-10",
-            score: 88,
-            total_score: 100
-          },
-          {
-            id: "exam-3",
-            name: "物理实验报告",
-            exam_date: "2023-10-28",
-            score: 95,
-            total_score: 100
-          }
-        ],
-        subjectPerformance: [
-          {
-            subject: "数学",
-            score: 92,
-            average: 78
-          },
-          {
-            subject: "英语", 
-            score: 88,
-            average: 80
-          },
-          {
-            subject: "物理",
-            score: 95,
-            average: 82
-          }
-        ]
-      };
+      // 使用API路由获取学生仪表盘数据
+      const response = await fetch(`/api/dashboard/student-data?studentId=${user?.id}`);
       
-      // 实际项目中，应该从API获取学生个人数据
-      // const response = await fetch('/api/dashboard/student-data');
-      // const result = await response.json();
-      // setStudentDashboardData(result.data);
+      if (!response.ok) {
+        throw new Error(`Error fetching student dashboard data: ${response.statusText}`);
+      }
       
-      setStudentDashboardData(mockData);
+      const result = await response.json();
+      
+      if (result.error) {
+        throw new Error(`Error fetching student dashboard data: ${result.error}`);
+      }
+      
+      setStudentDashboardData(result.data || {
+        totalExams: 0,
+        completedExams: 0,
+        averageScore: 0,
+        highestScore: 0,
+        recentExams: [],
+        subjectPerformance: []
+      });
     } catch (error) {
       console.error("Error fetching student dashboard data:", error);
     } finally {

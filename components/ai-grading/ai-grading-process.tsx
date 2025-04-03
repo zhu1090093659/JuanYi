@@ -36,51 +36,36 @@ export function AIGradingProcess({ examId, questions, students, answers, grades,
 
   useEffect(() => {
     if (isGrading) {
-      // Simulate real-time grading logs
-      const questionIds = questions.map((q) => q.id)
-      const studentIds = students.map((s) => s.id)
-
-      // Find answers that haven't been graded yet
-      const gradedPairs = new Set(grades.map((g) => `${g.student_id}-${g.question_id}`))
-      const ungradedAnswers = answers.filter((a) => !gradedPairs.has(`${a.student_id}-${a.question_id}`))
-
-      if (ungradedAnswers.length === 0) return
-
-      // Simulate grading one answer every second
-      const interval = setInterval(() => {
-        const randomAnswer = ungradedAnswers.shift()
-        if (!randomAnswer) {
-          clearInterval(interval)
-          return
+      // 从API获取实时评分日志
+      const fetchGradingLogs = async () => {
+        try {
+          const response = await fetch(`/api/exams/${examId}/grading-logs`);
+          
+          if (!response.ok) {
+            console.error("获取评分日志失败:", response.statusText);
+            return;
+          }
+          
+          const data = await response.json();
+          
+          if (data && data.logs) {
+            // 按时间戳排序，新的在前面
+            const sortedLogs = data.logs.sort((a: any, b: any) => b.timestamp - a.timestamp);
+            setGradingLogs(sortedLogs);
+          }
+        } catch (error) {
+          console.error("获取评分日志出错:", error);
         }
-
-        const question = questions.find((q) => q.id === randomAnswer.question_id)
-        const student = students.find((s) => s.id === randomAnswer.student_id)
-
-        if (!question || !student) return
-
-        // Generate a random score and confidence
-        const maxScore = question.score
-        const score = Math.round(Math.random() * maxScore * 10) / 10
-        const confidence = Math.round(60 + Math.random() * 40)
-
-        const newLog = {
-          id: `${randomAnswer.student_id}-${randomAnswer.question_id}`,
-          studentId: randomAnswer.student_id,
-          questionId: randomAnswer.question_id,
-          timestamp: Date.now(),
-          status: confidence < 70 ? "warning" : "completed",
-          score,
-          confidence,
-          message: `评分完成：${score}分，置信度 ${confidence}%${confidence < 70 ? "，建议人工审核" : ""}`,
-        }
-
-        setGradingLogs((prev) => [newLog, ...prev])
-      }, 2000)
-
-      return () => clearInterval(interval)
+      };
+      
+      // 首次获取
+      fetchGradingLogs();
+      
+      // 设置定时获取
+      const interval = setInterval(fetchGradingLogs, 3000);
+      return () => clearInterval(interval);
     }
-  }, [isGrading, questions, students, answers, grades])
+  }, [isGrading, examId]);
 
   const getStudentName = (studentId: string) => {
     const student = students.find((s) => s.id === studentId)

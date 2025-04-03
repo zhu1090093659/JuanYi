@@ -113,31 +113,46 @@ export default function AIGradingPage() {
     try {
       setIsGrading(true)
 
-      // Simulate AI grading process
       toast({
         title: "AI 批量评分已开始",
         description: "系统正在处理所有答案，这可能需要一些时间",
       })
 
-      // In a real application, you would call your server action here
-      // await batchGradeExam(params.id)
+      // 调用后端API开始AI批量评分
+      const response = await fetch(`/api/exams/${params.id}/batch-grade`, {
+        method: 'POST',
+      });
 
-      // For demo purposes, we'll simulate the grading process
-      let progress = 0
-      const interval = setInterval(() => {
-        progress += 5
-        setGradingProgress(Math.min(progress, 100))
+      if (!response.ok) {
+        throw new Error(`批量评分请求失败: ${response.statusText}`);
+      }
 
-        if (progress >= 100) {
-          clearInterval(interval)
-          setIsGrading(false)
+      // 获取当前进度
+      const checkProgress = async () => {
+        const progressResponse = await fetch(`/api/exams/${params.id}/grading-progress`);
+        if (!progressResponse.ok) {
+          throw new Error(`获取评分进度失败: ${progressResponse.statusText}`);
+        }
+        
+        const progressData = await progressResponse.json();
+        setGradingProgress(progressData.progress || 0);
+        
+        if (progressData.progress < 100) {
+          // 如果未完成，继续轮询
+          setTimeout(checkProgress, 2000);
+        } else {
+          // 评分完成
+          setIsGrading(false);
           toast({
             title: "AI 批量评分完成",
             description: "所有答案已成功评分",
-          })
-          fetchExamData() // Refresh data
+          });
+          fetchExamData(); // 刷新数据
         }
-      }, 1000)
+      };
+      
+      // 开始检查进度
+      checkProgress();
     } catch (error: any) {
       toast({
         title: "批量评分失败",
