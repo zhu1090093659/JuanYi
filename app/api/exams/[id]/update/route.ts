@@ -48,7 +48,7 @@ export async function POST(
     }
 
     // 使用服务角色密钥创建 Supabase 客户端
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const supabase = createRouteHandlerClient({ cookies: () => cookieStore }, {
       supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
       supabaseKey: process.env.SUPABASE_SERVICE_ROLE_KEY
