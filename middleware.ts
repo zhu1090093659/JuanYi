@@ -5,6 +5,9 @@ import { getToken } from "next-auth/jwt";
 // 受保护的路由列表
 const protectedRoutes = ["/dashboard", "/student", "/exams", "/users", "/analytics", "/reports", "/settings"];
 
+// 公开的认证相关路由（无需登录也可访问）
+const publicAuthRoutes = ["/login", "/register", "/reset-password", "/forgot-password", "/auth/callback"];
+
 export async function middleware(request: NextRequest) {
   // -- 添加日志 --
   console.log(`
@@ -25,6 +28,11 @@ export async function middleware(request: NextRequest) {
     );
     console.log("🛡️ 是否为受保护路由:", isProtectedRoute);
 
+    const isPublicAuthRoute = publicAuthRoutes.some((route) =>
+      currentPath === route || currentPath.startsWith(`${route}/`)
+    );
+    console.log("🔓 是否为公开认证路由:", isPublicAuthRoute);
+
     // 如果是受保护的路由但用户未登录
     if (isProtectedRoute && !token) {
       console.log("🚫 访问受保护路由但未登录，重定向到登录页面");
@@ -36,7 +44,7 @@ export async function middleware(request: NextRequest) {
     }
 
     // 如果用户已登录但尝试访问登录或注册页面
-    if ((currentPath === '/login' || currentPath === '/register') && token) {
+    if (isPublicAuthRoute && token) {
       console.log("✅ 已登录用户访问认证页面，重定向到仪表盘");
       const redirectUrl = new URL('/dashboard', request.url);
       // 返回一个新的重定向响应
