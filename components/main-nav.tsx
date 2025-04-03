@@ -14,7 +14,7 @@ export function MainNav() {
   // 获取用户角色，默认为student
   const userRole = user?.role || "student"
 
-  // 基础路由 - 所有角色都可以看到
+  // 基础路由 - 所有角色都可以看到，根据角色显示不同标签
   const baseRoutes = [
     {
       href: "/dashboard",
@@ -24,7 +24,7 @@ export function MainNav() {
     },
     {
       href: "/exams",
-      label: "试卷管理",
+      label: userRole === "student" ? "我的试卷" : "试卷管理",
       icon: <FileText className="mr-2 h-4 w-4" />,
       active: pathname === "/exams" || pathname.startsWith("/exams/"),
     },
