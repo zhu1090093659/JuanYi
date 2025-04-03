@@ -8,7 +8,7 @@ export function Header() {
     <header className="border-b">
       <div className="flex h-16 items-center px-4">
         <Link href="/" className="font-bold text-xl mr-6">
-          AI 阅卷平台
+          卷知
         </Link>
         <MainNav />
         <div className="ml-auto flex items-center space-x-4">

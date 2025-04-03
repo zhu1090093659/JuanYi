@@ -208,7 +208,7 @@ export default function LoginPage() {
         <Card className="w-[350px]">
           <CardHeader>
             <CardTitle>登录</CardTitle>
-            <CardDescription>登录您的 AI 阅卷平台账号</CardDescription>
+            <CardDescription>登录您的卷知账号</CardDescription>
             {verificationStatus.isVerified && (
               <div className="mt-2 rounded-md bg-green-50 p-2 text-sm text-green-800">
                 邮箱验证成功！您现在可以登录了。

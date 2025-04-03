@@ -202,7 +202,7 @@ export default function RegisterPage() {
       <Card className="w-[400px]">
         <CardHeader>
           <CardTitle>注册</CardTitle>
-          <CardDescription>创建您的 AI 阅卷平台账号</CardDescription>
+          <CardDescription>创建您的卷知账号</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit}>

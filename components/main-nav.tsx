@@ -28,12 +28,6 @@ export function MainNav() {
       icon: <FileText className="mr-2 h-4 w-4" />,
       active: pathname === "/exams" || pathname.startsWith("/exams/"),
     },
-    {
-      href: "/settings",
-      label: "设置",
-      icon: <Settings className="mr-2 h-4 w-4" />,
-      active: pathname === "/settings",
-    },
   ]
   
   // 教师和管理员专属路由
@@ -55,6 +49,14 @@ export function MainNav() {
       active: pathname === "/users",
     }
   ]
+
+  // 设置路由 - 放在最后
+  const settingsRoute = {
+    href: "/settings",
+    label: "设置",
+    icon: <Settings className="mr-2 h-4 w-4" />,
+    active: pathname === "/settings",
+  }
   
   // 根据角色确定可见路由
   let routes = [...baseRoutes]
@@ -66,6 +68,9 @@ export function MainNav() {
   if (userRole === "admin") {
     routes = [...routes, ...adminRoutes]
   }
+
+  // 将设置添加到最后
+  routes = [...routes, settingsRoute]
 
   return (
     <nav className="flex items-center space-x-4 lg:space-x-6">

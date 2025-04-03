@@ -8,8 +8,8 @@ import "@/styles/globals.css"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata = {
-  title: "AI 自动阅卷平台",
-  description: "面向中学和大学教师的 AI 辅助阅卷平台",
+  title: "卷知 - 智能阅卷平台",
+  description: "卷知 - 面向中学和大学教师的智能阅卷辅助平台",
   generator: 'v0.dev'
 }
 
