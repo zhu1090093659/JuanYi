@@ -59,6 +59,7 @@ export async function POST(request: Request) {
           role: userData.role,
           school: userData.school || null,
           class: userData.class || null,
+          teacher_id: userData.teacher_id || null,
         },
       ]);
 
